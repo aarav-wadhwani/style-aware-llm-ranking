@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Style-Aware LLM Ranking (Bradley–Terry + Style Control)</title>
+  <style>
+    :root{
+      --bg:#0b1020;
+      --card:#121a33;
+      --text:#e8ecff;
+      --muted:#aab3d6;
+      --link:#7aa7ff;
+      --border:rgba(255,255,255,0.12);
+      --shadow: 0 10px 30px rgba(0,0,0,0.35);
+      --radius: 14px;
+      --maxw: 980px;
+    }
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: radial-gradient(1200px 700px at 15% 0%, rgba(122,167,255,0.20), transparent 55%),
+                  radial-gradient(900px 600px at 85% 10%, rgba(180,120,255,0.14), transparent 50%),
+                  var(--bg);
+      color:var(--text);
+      line-height:1.55;
+    }
+    a{color:var(--link); text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    .wrap{max-width:var(--maxw); margin:0 auto; padding:28px 18px 60px;}
+    header{
+      padding:22px 22px 18px;
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      background: rgba(18,26,51,0.75);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
+    }
+    h1{margin:0 0 6px; font-size:28px; letter-spacing:0.2px;}
+    .subtitle{margin:0; color:var(--muted); font-size:14.5px;}
+    .pillrow{margin-top:14px; display:flex; flex-wrap:wrap; gap:10px;}
+    .pill{
+      border:1px solid var(--border);
+      padding:7px 10px;
+      border-radius:999px;
+      font-size:12.5px;
+      color:var(--muted);
+      background: rgba(255,255,255,0.03);
+    }
+    nav{
+      margin:16px 0 0;
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px 14px;
+      font-size:13px;
+    }
+    nav a{
+      padding:6px 10px;
+      border-radius:10px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+    }
+    section{margin-top:22px;}
+    .card{
+      padding:18px 18px;
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      background: rgba(18,26,51,0.72);
+      box-shadow: var(--shadow);
+    }
+    h2{margin:0 0 10px; font-size:18px;}
+    p{margin:10px 0; color:var(--text);}
+    .muted{color:var(--muted);}
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:14px;
+      margin-top:12px;
+    }
+    figure{
+      margin:0;
+      border:1px solid var(--border);
+      border-radius:12px;
+      overflow:hidden;
+      background: rgba(0,0,0,0.18);
+    }
+    figure img{
+      width:100%;
+      display:block;
+      height:auto;
+      background:#0a0f1f;
+    }
+    figcaption{
+      padding:10px 12px;
+      font-size:12.5px;
+      color:var(--muted);
+      border-top:1px solid var(--border);
+    }
+    code.inline{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12.5px;
+      padding: 2px 6px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.04);
+      color: #d7ddff;
+    }
+    ul{margin:10px 0 0 18px; color:var(--text);}
+    li{margin:6px 0;}
+    footer{margin-top:24px; color:var(--muted); font-size:12.5px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Style-Aware LLM Ranking</h1>
+      <p class="subtitle">
+        Bradley–Terry logistic ranking from pairwise battles, with bootstrap confidence intervals and style-control covariates (length, headers, lists, bold).
+      </p>
+      <div class="pillrow">
+        <div class="pill">Pairwise Logistic (Bradley–Terry)</div>
+        <div class="pill">Bootstrapped 95% CIs</div>
+        <div class="pill">Length / Formatting Controls</div>
+        <div class="pill">Category Leaderboards</div>
+      </div>
+      <nav>
+        <a href="#overview">Overview</a>
+        <a href="#data">Data Snapshot</a>
+        <a href="#overall">Overall Ranking</a>
+        <a href="#confidence">Uncertainty</a>
+        <a href="#length">Length Bias</a>
+        <a href="#stylecontrol">Style-Control Results</a>
+        <a href="#categories">Per-Category</a>
+      </nav>
+    </header>
+
+    <section id="overview">
+      <div class="card">
+        <h2>Overview</h2>
+        <p>
+          This project builds a leaderboard by learning a latent strength score per model from head-to-head battle outcomes.
+          The core idea: a model’s win probability depends on the difference in learned strengths, so we can fit a logistic model on
+          pairwise comparisons.
+        </p>
+        <p>
+          We then test whether stylistic properties—especially response length—inflate outcomes. Finally, we fit a joint model that includes
+          both model identity and style covariates to create a more “length-controlled” ranking.
+        </p>
+        <p class="muted">
+          Images are loaded from <span class="inline code">../results/figures</span> because this report lives in <span class="inline code">docs/</span>.
+          Do not rename your PNGs.
+        </p>
+      </div>
+    </section>
+
+    <section id="data">
+      <div class="card">
+        <h2>Data Snapshot</h2>
+        <div class="grid">
+
+          <figure>
+            <img src="../results/figures/newplot%20(11).png" alt="Battle Count for Each Model">
+            <figcaption><b>NewPlot11</b> — Battle count per model (imbalance motivates Bradley–Terry instead of raw win-rate).</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../results/figures/newplot%20(12).png" alt="Counts of Battle Outcomes">
+            <figcaption><b>NewPlot12</b> — Outcome distribution (ties vs model_a vs model_b wins).</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../results/figures/newplot%20(13).png" alt="Battle Count Matrix">
+            <figcaption><b>NewPlot13</b> — Pairwise battle volume matrix (all battles; shows who played whom).</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../results/figures/newplot%20(14).png" alt="Battle Count Matrix Without Ties">
+            <figcaption><b>NewPlot14</b> — Pairwise battle volume without ties (used for ranking).</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../results/figures/newplot%20(15).png" alt="Distribution of Languages">
+            <figcaption><b>NewPlot15</b> — Prompt language distribution (dataset coverage).</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../results/figures/newplot%20(16).png" alt="Number of Conversation Turns">
+            <figcaption><b>NewPlot16</b> — Conversation turn-count distribution (most battles are short exchanges).</figcaption>
+          </figure>
+
+        </div>
+      </div>
+    </section>
+
+    <section id="overall">
+      <div class="card">
+        <h2>Overall Ranking (No Style Control)</h2>
+        <p>
+          Overall leaderboard learned from pairwise outcomes using a no-intercept logistic formulation.
+        </p>
+
+        <div class="grid">
+          <figure>
+            <img src="../results/figures/newplot%20(18).png" alt="Rank Heatmap Overall">
+            <figcaption><b>NewPlot18</b> — Overall rank heatmap for the top models.</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../results/figures/newplot%20(17).png" alt="Win Fraction Heatmap">
+            <figcaption><b>NewPlot17</b> — Empirical win fractions by matchup (non-ties).</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../results/figures/newplot%20(19).png" alt="Average Win Rate No Ties">
+            <figcaption><b>NewPlot19</b> — Average win-rate (shown for intuition; not used as the final ranking metric).</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../results/figures/newplot%20(20).png" alt="Average Win Rate No Top Prompts">
+            <figcaption><b>NewPlot20</b> — Win-rate after removing top prompts (robustness check against prompt-skew).</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section id="confidence">
+      <div class="card">
+        <h2>Uncertainty: Bootstrapped Confidence Intervals</h2>
+        <p>
+          Because rankings come from a finite sample of battles, we bootstrap the dataset, refit the model, and compute 95% intervals for each model score.
+        </p>
+
+        <div class="grid">
+          <figure>
+            <img src="../results/figures/newplot%20(30).png" alt="Model Scores with 95% CIs">
+            <figcaption><b>NewPlot30</b> — Model score point estimates with bootstrapped 95% confidence intervals.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section id="length">
+      <div class="card">
+        <h2>Length Bias Check</h2>
+        <p>
+          We measure assistant response length using GPT-2 tokenization and compare average length vs ranking position.
+          The goal is to test whether longer answers systematically correlate with better leaderboard placement.
+        </p>
+
+        <div class="grid">
+          <figure>
+            <img src="../results/figures/newplot%20(8).png" alt="Average Response Length with Trendline">
+            <figcaption><b>NewPlot8</b> — Average response length per model (ordered by performance) with a fitted trendline.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section id="stylecontrol">
+      <div class="card">
+        <h2>Style Control: Joint Model (Model Strength + Style Covariates)</h2>
+        <p>
+          We extend the design matrix by appending normalized style differences (length, headers, lists, bold) so the model can separate:
+        </p>
+        <ul>
+          <li>Intrinsic model strength (after controlling for style)</li>
+          <li>How much each style feature affects win probability</li>
+        </ul>
+
+        <div class="grid">
+          <figure>
+            <img src="../results/figures/newplot%20(9).png" alt="With and Without Style Control">
+            <figcaption><b>NewPlot9</b> — Rank comparison: baseline vs style-controlled leaderboard.</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../results/figures/newplot%20(10).png" alt="Style Feature Coefficients">
+            <figcaption><b>NewPlot10</b> — Estimated style feature effects with confidence intervals (length dominates; formatting features smaller).</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section id="categories">
+      <div class="card">
+        <h2>Per-Category Leaderboards</h2>
+        <p>
+          We also compute category-specific leaderboards (code, math, instruction following, creativity, technical accuracy) to show how model strengths vary by task type.
+        </p>
+
+        <div class="grid">
+          <figure>
+            <img src="../results/figures/newplot%20(22).png" alt="Overall and Per-Category Ranks">
+            <figcaption><b>NewPlot22</b> — Overall vs per-category ranks (single view; strong recruiter-facing summary).</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../results/figures/newplot%20(23).png" alt="Runtime vs K">
+            <figcaption><b>NewPlot23</b> — Runtime vs number of prompt clusters (K) used for prompt-structure analysis.</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../results/figures/newplot%20(24).png" alt="Elbow Plot Inertia vs K">
+            <figcaption><b>NewPlot24</b> — Elbow plot (inertia vs K) supporting the prompt clustering choice.</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../results/figures/newplot%20(25).png" alt="2D Prompt Cluster Visualization">
+            <figcaption><b>NewPlot25</b> — 2D embedding of prompt clusters (structure of the prompt space).</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../results/figures/newplot%20(29).png" alt="Proportion of Battles in Each Category">
+            <figcaption><b>NewPlot29</b> — Category coverage in the dataset (helps interpret category leaderboard stability).</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="card">
+        <b>How to view locally</b>
+        <p class="muted" style="margin-top:6px;">
+          Open <span class="inline code">docs/index.html</span> in a browser, or run a local server (recommended to avoid path issues):
+        </p>
+        <p class="muted">
+          From repo root: <span class="inline code">python -m http.server 8000</span> then visit <span class="inline code">http://localhost:8000/docs/</span>
+        </p>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
