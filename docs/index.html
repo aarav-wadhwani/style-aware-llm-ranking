@@ -3,908 +3,573 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Style-Aware LLM Ranking: A Bradley–Terry Approach with Covariate Control</title>
+  <title>Style-Aware LLM Ranking | Technical Report</title>
+  <meta name="description" content="A rigorous statistical framework for ranking large language models using the Bradley–Terry model with covariate control for stylistic biases.">
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+
   <style>
-    :root{
-      --bg:#0a0e1a;
-      --card:#0f1525;
-      --card-elevated:#141b2e;
-      --text:#e5e9f5;
-      --text-secondary:#b8c1e0;
-      --muted:#8891b5;
-      --link:#6b9eff;
-      --link-hover:#8ab4ff;
-      --border:rgba(255,255,255,0.08);
-      --border-strong:rgba(255,255,255,0.15);
-      --shadow: 0 8px 32px rgba(0,0,0,0.4);
-      --shadow-strong: 0 12px 48px rgba(0,0,0,0.5);
-      --radius: 16px;
-      --radius-sm: 12px;
-      --maxw: 1100px;
-      --accent-blue: #6b9eff;
-      --accent-purple: #a78bfa;
-      --accent-cyan: #67e8f9;
+    :root {
+      /* Color Palette - Academic Dark Mode */
+      --bg-body: #0b0e14;
+      --bg-sidebar: #111620;
+      --bg-card: #161b28;
+      --bg-card-hover: #1c2333;
+      
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(255, 255, 255, 0.15);
+      
+      --text-main: #e2e8f0;
+      --text-muted: #94a3b8;
+      --text-faint: #64748b;
+      
+      --accent-primary: #38bdf8; /* Sky Blue */
+      --accent-secondary: #818cf8; /* Indigo */
+      --accent-success: #34d399; /* Emerald */
+      --accent-warning: #fbbf24; /* Amber */
+      
+      --font-ui: 'Inter', sans-serif;
+      --font-body: 'Merriweather', serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      
+      --max-width: 1400px;
+      --sidebar-width: 280px;
     }
+
+    /* Reset & Base */
+    * { box-sizing: border-box; }
     
-    * {
-      box-sizing: border-box;
-    }
+    html { scroll-behavior: smooth; }
     
-    html,body{
-      height:100%;
-      margin:0;
-      padding:0;
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-body);
+      color: var(--text-main);
+      font-family: var(--font-body);
+      line-height: 1.8;
+      font-size: 17px;
     }
-    
-    body{
-      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: 
-        radial-gradient(ellipse 1400px 800px at 20% 0%, rgba(107,158,255,0.15), transparent 60%),
-        radial-gradient(ellipse 1000px 700px at 80% 10%, rgba(167,139,250,0.12), transparent 55%),
-        radial-gradient(ellipse 800px 600px at 50% 100%, rgba(103,232,249,0.08), transparent 50%),
-        var(--bg);
-      background-attachment: fixed;
-      color:var(--text);
-      line-height:1.7;
-      font-size:16px;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
+
+    a { color: var(--accent-primary); text-decoration: none; transition: 0.2s; }
+    a:hover { color: var(--accent-secondary); }
+
+    /* Layout Grid */
+    .app-container {
+      display: grid;
+      grid-template-columns: var(--sidebar-width) 1fr;
+      min-height: 100vh;
     }
-    
-    a{
-      color:var(--link);
-      text-decoration:none;
-      transition: color 0.2s ease;
+
+    /* Sidebar Navigation */
+    .sidebar {
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border-subtle);
+      padding: 2rem;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
     }
-    a:hover{
-      color:var(--link-hover);
-      text-decoration:underline;
+
+    .brand {
+      font-family: var(--font-ui);
+      font-weight: 700;
+      font-size: 1.2rem;
+      color: var(--text-main);
+      margin-bottom: 2rem;
+      letter-spacing: -0.02em;
     }
-    
-    .wrap{
-      max-width:var(--maxw);
-      margin:0 auto;
-      padding:40px 24px 80px;
+
+    .nav-links {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
     }
-    
-    /* Header Styles */
-    header{
-      padding:48px 40px 40px;
-      border:1px solid var(--border-strong);
-      border-radius:var(--radius);
-      background: linear-gradient(135deg, rgba(15,21,37,0.95), rgba(20,27,46,0.92));
-      box-shadow: var(--shadow-strong);
-      backdrop-filter: blur(12px);
-      margin-bottom: 48px;
+
+    .nav-links a {
+      display: block;
+      padding: 0.6rem 0.8rem;
+      border-radius: 6px;
+      font-family: var(--font-ui);
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      border-left: 2px solid transparent;
     }
-    
-    h1{
-      margin:0 0 12px;
-      font-size:36px;
-      font-weight:700;
-      letter-spacing:-0.5px;
-      line-height:1.2;
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+
+    .nav-links a:hover, .nav-links a.active {
+      background: rgba(255,255,255,0.03);
+      color: var(--text-main);
+      border-left-color: var(--accent-primary);
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding-top: 2rem;
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      color: var(--text-faint);
+    }
+
+    /* Main Content */
+    main {
+      padding: 3rem 4rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Typography */
+    h1, h2, h3, h4 {
+      font-family: var(--font-ui);
+      color: var(--text-main);
+      margin-top: 2.5rem;
+      margin-bottom: 1rem;
+      line-height: 1.3;
+    }
+
+    h1 {
+      font-size: 2.75rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-top: 0;
+      background: linear-gradient(120deg, var(--text-main), var(--text-muted));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      background-clip: text;
     }
-    
-    .subtitle{
-      margin:0 0 24px;
-      color:var(--text-secondary);
-      font-size:17px;
-      line-height:1.6;
-      max-width: 900px;
+
+    h2 {
+      font-size: 1.8rem;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 0.5rem;
+      margin-top: 4rem;
     }
-    
-    .pillrow{
-      margin-top:24px;
-      display:flex;
-      flex-wrap:wrap;
-      gap:12px;
+
+    h3 { font-size: 1.4rem; font-weight: 600; color: var(--accent-primary); }
+    h4 { font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-top: 2rem;}
+
+    p { margin-bottom: 1.5rem; color: var(--text-muted); }
+    strong { color: var(--text-main); font-weight: 600; }
+
+    /* Components */
+    .abstract {
+      font-size: 1.1rem;
+      color: var(--text-main);
+      background: linear-gradient(180deg, rgba(56, 189, 248, 0.1) 0%, rgba(56, 189, 248, 0.02) 100%);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      padding: 2rem;
+      border-radius: 12px;
+      margin-bottom: 3rem;
     }
-    
-    .pill{
-      border:1px solid var(--border);
-      padding:8px 16px;
-      border-radius:999px;
-      font-size:13px;
-      font-weight:500;
-      color:var(--text-secondary);
-      background: rgba(255,255,255,0.04);
-      backdrop-filter: blur(8px);
+
+    .tags { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;}
+    .tag {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 99px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
     }
-    
-    nav{
-      margin:28px 0 0;
-      display:flex;
-      flex-wrap:wrap;
-      gap:12px;
-      font-size:14px;
+
+    /* Cards & Figures */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 2rem;
+      margin: 2rem 0;
     }
-    
-    nav a{
-      padding:10px 18px;
-      border-radius:var(--radius-sm);
-      border:1px solid var(--border);
-      background: rgba(255,255,255,0.04);
-      transition: all 0.2s ease;
-      font-weight:500;
+
+    .figure-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: transform 0.2s, border-color 0.2s;
     }
-    
-    nav a:hover{
-      background: rgba(107,158,255,0.15);
-      border-color: rgba(107,158,255,0.3);
-      text-decoration: none;
-      transform: translateY(-1px);
-    }
-    
-    /* Section Styles */
-    section{
-      margin-top:40px;
-      scroll-margin-top: 20px;
-    }
-    
-    .card{
-      padding:36px 40px;
-      border:1px solid var(--border);
-      border-radius:var(--radius);
-      background: linear-gradient(135deg, rgba(15,21,37,0.85), rgba(20,27,46,0.8));
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
-    }
-    
-    h2{
-      margin:0 0 20px;
-      font-size:28px;
-      font-weight:700;
-      letter-spacing:-0.3px;
-      color:var(--text);
-      border-bottom: 2px solid rgba(107,158,255,0.2);
-      padding-bottom: 12px;
-    }
-    
-    h3{
-      margin:32px 0 16px;
-      font-size:20px;
-      font-weight:600;
-      color:var(--text);
-      letter-spacing:-0.2px;
-    }
-    
-    h3:first-of-type{
-      margin-top:24px;
-    }
-    
-    p{
-      margin:16px 0;
-      color:var(--text-secondary);
-      line-height:1.8;
-    }
-    
-    .muted{
-      color:var(--muted);
-      font-size:14px;
-    }
-    
-    /* Mathematical Content */
-    .math-block{
-      background: rgba(0,0,0,0.25);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 24px;
-      margin: 24px 0;
-      overflow-x: auto;
-      font-family: 'Cambria Math', 'Latin Modern Math', serif;
-      font-size: 16px;
-      line-height: 2;
-      color: var(--text);
-    }
-    
-    .math-inline{
-      font-family: 'Cambria Math', 'Latin Modern Math', serif;
-      font-style: italic;
-      color: var(--text);
-    }
-    
-    /* Callout Boxes */
-    .callout{
-      background: rgba(107,158,255,0.08);
-      border-left: 4px solid var(--accent-blue);
-      border-radius: var(--radius-sm);
-      padding: 20px 24px;
-      margin: 24px 0;
-    }
-    
-    .callout.warning{
-      background: rgba(251,191,36,0.08);
-      border-left-color: #fbbf24;
-    }
-    
-    .callout.info{
-      background: rgba(103,232,249,0.08);
-      border-left-color: var(--accent-cyan);
-    }
-    
-    .callout-title{
-      font-weight: 600;
-      font-size: 15px;
-      margin: 0 0 8px;
-      color: var(--text);
-    }
-    
-    .callout p{
-      margin: 8px 0 0;
-      font-size: 14.5px;
-    }
-    
-    /* Figure Grid */
-    .grid{
-      display:grid;
-      grid-template-columns: 1fr;
-      gap:24px;
-      margin-top:28px;
-    }
-    
-    @media (min-width: 768px) {
-      .grid.two-col{
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-    
-    figure{
-      margin:0;
-      border:1px solid var(--border);
-      border-radius:var(--radius-sm);
-      overflow:hidden;
-      background: rgba(0,0,0,0.3);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    
-    figure:hover{
+
+    .figure-card:hover {
+      border-color: var(--border-focus);
       transform: translateY(-2px);
-      box-shadow: var(--shadow);
     }
-    
-    figure img{
-      width:100%;
-      display:block;
-      height:auto;
-      background:#0a0f1f;
+
+    .figure-card img {
+      width: 100%;
+      height: auto;
+      display: block;
+      background: #0f111a; /* Match plot bg if possible */
     }
-    
-    figcaption{
-      padding:16px 18px;
-      font-size:13.5px;
-      color:var(--muted);
-      border-top:1px solid var(--border);
-      line-height: 1.5;
+
+    figcaption {
+      padding: 1rem 1.5rem;
+      font-family: var(--font-ui);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border-subtle);
+      background: rgba(0,0,0,0.2);
     }
-    
-    figcaption b{
-      color: var(--text-secondary);
-      font-weight: 600;
-    }
-    
-    /* Code Styles */
-    code.inline{
-      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-      font-size: 13.5px;
-      padding: 3px 8px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: rgba(255,255,255,0.06);
-      color: #d4dcff;
-      font-weight: 500;
-    }
-    
-    /* Lists */
-    ul{
-      margin:16px 0;
-      padding-left: 24px;
-      color:var(--text-secondary);
-    }
-    
-    ul.key-points{
-      list-style: none;
-      padding-left: 0;
-    }
-    
-    ul.key-points li{
-      margin:12px 0;
-      padding-left: 28px;
-      position: relative;
-    }
-    
-    ul.key-points li:before{
-      content: "→";
-      position: absolute;
-      left: 0;
-      color: var(--accent-blue);
-      font-weight: bold;
-    }
-    
-    li{
-      margin:10px 0;
-      line-height: 1.7;
-    }
-    
-    /* Emphasis */
-    strong{
-      color: var(--text);
-      font-weight: 600;
-    }
-    
-    em{
-      color: var(--text);
-      font-style: italic;
-    }
-    
-    /* Footer */
-    footer{
-      margin-top:60px;
-      padding-top: 32px;
-      border-top: 1px solid var(--border);
-      color:var(--muted);
-      font-size:13px;
+
+    figcaption strong { color: var(--text-main); display: block; margin-bottom: 0.25rem; }
+
+    /* Mathematical Notation */
+    .math-block {
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 1.2rem;
+      background: rgba(0,0,0,0.3);
+      padding: 1.5rem;
+      border-radius: 8px;
       text-align: center;
+      margin: 2rem 0;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+    }
+
+    .math-inline {
+      font-family: 'Times New Roman', Times, serif;
+      font-style: italic;
+      color: var(--text-main);
+      padding: 0 2px;
+    }
+
+    /* Insights Box */
+    .insight-box {
+      border-left: 3px solid var(--accent-secondary);
+      background: linear-gradient(90deg, rgba(129, 140, 248, 0.05), transparent);
+      padding: 1.5rem;
+      margin: 2rem 0;
+      border-radius: 0 8px 8px 0;
     }
     
+    .insight-title {
+      font-family: var(--font-ui);
+      font-weight: 700;
+      color: var(--accent-secondary);
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+
+    /* Lists */
+    ul { padding-left: 1.5rem; color: var(--text-muted); }
+    li { margin-bottom: 0.5rem; }
+    
+    /* Code */
+    code {
+      font-family: var(--font-mono);
+      background: rgba(255,255,255,0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.85em;
+      color: var(--text-main);
+    }
+
     /* Responsive */
-    @media (max-width: 768px) {
-      .wrap{
-        padding: 24px 16px 60px;
+    @media (max-width: 900px) {
+      .app-container { grid-template-columns: 1fr; }
+      .sidebar { 
+        height: auto; 
+        position: relative; 
+        border-right: none; 
+        border-bottom: 1px solid var(--border-subtle);
+        padding: 1.5rem;
       }
-      
-      header{
-        padding: 32px 24px 28px;
-      }
-      
-      h1{
-        font-size: 28px;
-      }
-      
-      .subtitle{
-        font-size: 15px;
-      }
-      
-      .card{
-        padding: 24px 20px;
-      }
-      
-      h2{
-        font-size: 22px;
-      }
-      
-      h3{
-        font-size: 18px;
-      }
-      
-      .math-block{
-        font-size: 14px;
-        padding: 16px;
-      }
+      main { padding: 2rem 1.5rem; }
+      .grid-2 { grid-template-columns: 1fr; }
+      h1 { font-size: 2rem; }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
+
+<div class="app-container">
+  <aside class="sidebar">
+    <div class="brand">LLM Rankings</div>
+    <nav>
+      <ul class="nav-links">
+        <li><a href="#executive-summary">Executive Summary</a></li>
+        <li><a href="#data-landscape">Data Landscape</a></li>
+        <li><a href="#methodology">Statistical Methodology</a></li>
+        <li><a href="#baseline-results">Baseline Rankings</a></li>
+        <li><a href="#length-bias">The Length Bias Problem</a></li>
+        <li><a href="#style-control">Style-Controlled Results</a></li>
+        <li><a href="#domain-analysis">Domain Specificity</a></li>
+        <li><a href="#conclusion">Conclusion</a></li>
+      </ul>
+    </nav>
+    <div class="sidebar-footer">
+      <p>Deployed via GitHub Pages<br>Last Updated: Dec 2025</p>
+    </div>
+  </aside>
+
+  <main>
+    <section id="executive-summary">
       <h1>Style-Aware LLM Ranking</h1>
-      <p class="subtitle">
-        A rigorous statistical framework for ranking large language models using the Bradley–Terry model with pairwise battle data, bootstrap confidence intervals, and explicit control for stylistic covariates including response length, formatting structure, and presentation style.
-      </p>
-      <div class="pillrow">
-        <div class="pill">Bradley–Terry Logistic Model</div>
-        <div class="pill">Bootstrap Inference (95% CI)</div>
-        <div class="pill">Style Covariate Control</div>
-        <div class="pill">Category-Specific Rankings</div>
+      <div class="tags">
+        <span class="tag">Bradley-Terry Model</span>
+        <span class="tag">Bootstrap Inference</span>
+        <span class="tag">Covariate Control</span>
+        <span class="tag">Statistical Learning</span>
       </div>
-      <nav>
-        <a href="#overview">Overview</a>
-        <a href="#methodology">Methodology</a>
-        <a href="#data">Data Analysis</a>
-        <a href="#overall">Overall Ranking</a>
-        <a href="#confidence">Uncertainty</a>
-        <a href="#length">Length Bias</a>
-        <a href="#stylecontrol">Style Control</a>
-        <a href="#categories">Categories</a>
-      </nav>
-    </header>
+      
+      <p style="font-size: 1.2rem; color: var(--text-main); margin-top: 1.5rem;">
+        Large Language Model (LLM) evaluation often relies on aggregated win-rates from pairwise human preferences. However, this approach is susceptible to imbalances in evaluation data and superficial stylistic confounds—most notably, response length.
+      </p>
 
-    <section id="overview">
-      <div class="card">
-        <h2>Overview</h2>
-        <p>
-          Evaluating large language models (LLMs) through human preference data has become a cornerstone of model assessment and alignment research. Traditional approaches often aggregate pairwise battle outcomes into simple win-rate statistics, but this methodology suffers from significant limitations: unbalanced comparison matrices, failure to account for transitivity in preferences, and sensitivity to stylistic confounds such as response length and formatting choices.
+      <div class="abstract">
+        <strong>Abstract:</strong> This report presents a rigorous statistical framework for ranking LLMs. By utilizing the <strong>Bradley–Terry model</strong> with style covariates, we decouple intrinsic content quality from presentation hacks. We analyze a large-scale dataset of pairwise battles, identifying that simple verbosity is a strong predictor of human preference. Our style-controlled ranking reveals "true" model capability, penalizing models that rely on excessive length to win battles.
+      </div>
+    </section>
+
+    <hr style="border: 0; border-top: 1px solid var(--border-subtle); margin: 3rem 0;">
+
+    <section id="data-landscape">
+      <h2>1. The Data Landscape</h2>
+      <p>
+        The foundation of this analysis is a dataset of crowdsourced pairwise comparisons ("battles"). Before modeling, it is crucial to inspect the distributional properties of the data to identify potential biases such as class imbalance or sparse coverage.
+      </p>
+
+      <div class="grid-2">
+        <figure class="figure-card">
+          <img src="results/figures/newplot%20(11).png" alt="Distribution of battle outcomes">
+          <figcaption>
+            <strong>Figure 1: Battle Outcome Distribution</strong>
+            The dataset includes wins for Model A, wins for Model B, and ties. Ties are excluded from the primary Bradley-Terry estimation to maximize signal clarity.
+          </figcaption>
+        </figure>
+        <figure class="figure-card">
+          <img src="results/figures/newplot%20(12).png" alt="Battle count per model">
+          <figcaption>
+            <strong>Figure 2: Model Exposure Balance</strong>
+            Significant variance exists in battle counts. Popular models have thousands of evaluations, while newer ones have fewer. This motivates the use of probabilistic ranking over simple win-rates.
+          </figcaption>
+        </figure>
+      </div>
+
+      <div class="insight-box">
+        <span class="insight-title">Data Insight: Sparsity & Transitivity</span>
+        <p style="margin:0">
+          Naive win-rate calculations fail when the comparison matrix is sparse (i.e., not every model has fought every other model). The heatmaps below (Fig 3 & 4) show the density of comparisons. The Bradley-Terry model solves this by leveraging <strong>transitivity</strong>: if $A > B$ and $B > C$, we can infer $A > C$ even without direct battles.
         </p>
-        <p>
-          This project implements a principled statistical framework based on the <strong>Bradley–Terry model</strong>, a well-established method from psychometrics and sports analytics that learns latent strength parameters for each model from pairwise comparison data. By modeling win probabilities as a function of strength differences through a logistic link, we obtain a theoretically grounded ranking that naturally handles imbalanced data and provides a consistent global ordering.
-        </p>
+      </div>
 
-        <h3>Research Questions</h3>
-        <p>This analysis addresses three fundamental questions:</p>
-        <ul class="key-points">
-          <li><strong>Ranking Validity:</strong> Can we derive a reliable global ranking from noisy, imbalanced pairwise preference data?</li>
-          <li><strong>Style Confounding:</strong> Do superficial stylistic properties (response length, use of headers, lists, bold formatting) systematically bias human preferences?</li>
-          <li><strong>Domain Specificity:</strong> How do model strengths vary across task categories (code generation, mathematical reasoning, creative writing, etc.)?</li>
-        </ul>
+      <div class="grid-2">
+        <figure class="figure-card">
+          <img src="results/figures/newplot%20(13).png" alt="Heatmap of all battles">
+          <figcaption><strong>Figure 3:</strong> Total pairwise battle matrix (All outcomes).</figcaption>
+        </figure>
+        <figure class="figure-card">
+          <img src="results/figures/newplot%20(14).png" alt="Heatmap of battles without ties">
+          <figcaption><strong>Figure 4:</strong> Pairwise battle matrix (Ties removed).</figcaption>
+        </figure>
+      </div>
 
-        <div class="callout info">
-          <div class="callout-title">Technical Note: File Structure</div>
-          <p>All visualizations are loaded from <code class="inline">../results/figures</code> as this report is deployed from the <code class="inline">docs/</code> directory. Figure filenames must remain unchanged to maintain compatibility with the deployment pipeline.</p>
-        </div>
+      <h3>Demographics & Interaction Complexity</h3>
+      <p>
+        The dataset is heavily English-dominated but includes a long tail of multilingual interactions. Most interactions are short (1-2 turns), suggesting the ranking primarily reflects "zero-shot" or "few-shot" QA capability rather than long-context maintenance.
+      </p>
+      
+      <div class="grid-2">
+        <figure class="figure-card">
+          <img src="results/figures/newplot%20(15).png" alt="Language distribution">
+          <figcaption><strong>Figure 5:</strong> Language distribution showing English dominance.</figcaption>
+        </figure>
+        <figure class="figure-card">
+          <img src="results/figures/newplot%20(16).png" alt="Conversation turns">
+          <figcaption><strong>Figure 6:</strong> Distribution of conversation turns per battle.</figcaption>
+        </figure>
       </div>
     </section>
 
     <section id="methodology">
-      <div class="card">
-        <h2>Methodology</h2>
-        
-        <h3>The Bradley–Terry Model</h3>
-        <p>
-          The Bradley–Terry model provides a probabilistic framework for pairwise comparisons. Given models <span class="math-inline">i</span> and <span class="math-inline">j</span> with latent strength parameters <span class="math-inline">θ<sub>i</sub></span> and <span class="math-inline">θ<sub>j</sub></span>, the probability that model <span class="math-inline">i</span> defeats model <span class="math-inline">j</span> is:
-        </p>
-        
-        <div class="math-block">
-          P(i beats j) = σ(θ<sub>i</sub> − θ<sub>j</sub>) = 1 / (1 + exp(−(θ<sub>i</sub> − θ<sub>j</sub>)))
-        </div>
-        
-        <p>
-          where <span class="math-inline">σ(·)</span> denotes the logistic (sigmoid) function. This formulation ensures that win probabilities are bounded in [0,1] and depend only on the <em>difference</em> in strengths, providing a natural interpretation: a one-unit increase in <span class="math-inline">θ<sub>i</sub></span> relative to <span class="math-inline">θ<sub>j</sub></span> corresponds to a constant multiplicative increase in the odds ratio.
-        </p>
-        
-        <h3>Maximum Likelihood Estimation</h3>
-        <p>
-          Parameters are estimated by maximizing the log-likelihood over all observed battles. For a dataset with battle outcomes <span class="math-inline">y<sub>ij</sub></span> ∈ {0,1} (where 1 indicates model <span class="math-inline">i</span> won against model <span class="math-inline">j</span>), the log-likelihood is:
-        </p>
-        
-        <div class="math-block">
-          ℓ(θ) = Σ<sub>battles</sub> [ y<sub>ij</sub> · log(σ(θ<sub>i</sub> − θ<sub>j</sub>)) + (1 − y<sub>ij</sub>) · log(1 − σ(θ<sub>i</sub> − θ<sub>j</sub>)) ]
-        </div>
-        
-        <p>
-          This is equivalent to logistic regression without an intercept term, where the design matrix encodes model identities through indicator variables with values +1, −1, or 0 depending on which models participated in each battle.
-        </p>
-        
-        <h3>Bootstrap Confidence Intervals</h3>
-        <p>
-          To quantify uncertainty in our rankings, we employ the <strong>percentile bootstrap method</strong>. We resample the battle dataset with replacement <span class="math-inline">B</span> = 1000 times, refit the Bradley–Terry model on each bootstrap sample, and compute empirical 95% confidence intervals from the 2.5th and 97.5th percentiles of the bootstrap distribution. This approach is non-parametric and makes no distributional assumptions beyond the model structure itself.
-        </p>
-        
-        <h3>Style-Controlled Ranking</h3>
-        <p>
-          Human evaluators may exhibit systematic biases toward certain response characteristics independent of content quality. To isolate intrinsic model strength from stylistic effects, we extend the model to include style covariates:
-        </p>
-        
-        <div class="math-block">
-          P(i beats j) = σ(θ<sub>i</sub> − θ<sub>j</sub> + β<sub>length</sub> · Δlength + β<sub>headers</sub> · Δheaders + β<sub>lists</sub> · Δlists + β<sub>bold</sub> · Δbold)
-        </div>
-        
-        <p>
-          Here, Δ denotes the normalized difference in each style feature between model <span class="math-inline">i</span> and model <span class="math-inline">j</span> responses. The coefficients <span class="math-inline">β</span> quantify the effect size of each stylistic dimension on win probability, enabling us to derive a <em>style-adjusted</em> ranking that reflects content quality after controlling for presentation effects.
-        </p>
-
-        <div class="callout">
-          <div class="callout-title">Key Advantages of This Approach</div>
-          <p>Unlike simple win-rate aggregation, the Bradley–Terry model naturally handles imbalanced comparison matrices, provides a consistent transitive ordering, and allows principled statistical inference through bootstrap or asymptotic methods. The style covariate extension enables causal interpretation of formatting effects on perceived model quality.</p>
-        </div>
-      </div>
-    </section>
-
-    <section id="data">
-      <div class="card">
-        <h2>Data Analysis & Exploratory Statistics</h2>
-        <p>
-          Before fitting ranking models, we conduct a comprehensive exploratory analysis to understand dataset characteristics, identify potential biases, and validate modeling assumptions. This section presents key distributional properties and structural patterns in the battle data.
-        </p>
-
-        <h3>Battle Volume and Coverage</h3>
-        <p>
-          The dataset exhibits substantial heterogeneity in battle volume across models, with some models participating in thousands of comparisons while others have limited coverage. This imbalance motivates our use of the Bradley–Terry model rather than naive win-rate calculation, as the latter would be unstable for low-sample models and fail to leverage transitivity information from indirect comparisons.
-        </p>
-
-        <div class="grid two-col">
-          <figure>
-            <img src="results/figures/newplot%20(11).png" alt="Battle Count for Each Model">
-            <figcaption><b>Figure 1:</b> Battle participation count per model. Note the significant variance in comparison volume, ranging from hundreds to thousands of battles per model. This imbalance underscores the importance of using a model-based ranking approach.</figcaption>
-          </figure>
-
-          <figure>
-            <img src="results/figures/newplot%20(12).png" alt="Counts of Battle Outcomes">
-            <figcaption><b>Figure 2:</b> Distribution of battle outcomes. The dataset includes ties (draws), model A wins, and model B wins. Ties are excluded from ranking estimation to focus on clear preference signals.</figcaption>
-          </figure>
-        </div>
-
-        <h3>Pairwise Coverage Matrix</h3>
-        <p>
-          The pairwise battle matrices visualize which models have been directly compared. Dense entries indicate frequently occurring matchups, while sparse regions reveal gaps in coverage. The Bradley–Terry model's ability to propagate information through transitive chains is particularly valuable in regions with incomplete pairwise data.
-        </p>
-
-        <div class="grid two-col">
-          <figure>
-            <img src="results/figures/newplot%20(13).png" alt="Battle Count Matrix">
-            <figcaption><b>Figure 3:</b> Complete pairwise battle volume matrix including all outcomes. Darker cells indicate more frequent matchups between model pairs.</figcaption>
-          </figure>
-
-          <figure>
-            <img src="results/figures/newplot%20(14).png" alt="Battle Count Matrix Without Ties">
-            <figcaption><b>Figure 4:</b> Pairwise battle matrix excluding ties. This filtered matrix forms the basis for Bradley–Terry parameter estimation.</figcaption>
-          </figure>
-        </div>
-
-        <h3>Dataset Demographics</h3>
-        <p>
-          Understanding the composition of prompts and interaction patterns is essential for assessing the generalizability of our rankings. We analyze language distribution and conversation complexity to identify potential domain-specific effects.
-        </p>
-
-        <div class="grid two-col">
-          <figure>
-            <img src="results/figures/newplot%20(15).png" alt="Distribution of Languages">
-            <figcaption><b>Figure 5:</b> Language distribution in the prompt dataset. Multilingual coverage is important for assessing model robustness across linguistic domains.</figcaption>
-          </figure>
-
-          <figure>
-            <img src="results/figures/newplot%20(16).png" alt="Number of Conversation Turns">
-            <figcaption><b>Figure 6:</b> Distribution of conversation turn counts. The majority of battles involve short exchanges, with the long tail representing multi-turn dialogues that test conversational coherence.</figcaption>
-          </figure>
-        </div>
-
-        <div class="callout warning">
-          <div class="callout-title">Data Quality Considerations</div>
-          <p>The observed imbalance in model coverage and the skewed distribution of conversation lengths suggest that rankings should be interpreted with appropriate uncertainty bounds. Bootstrap confidence intervals (presented later) provide formal quantification of estimation uncertainty arising from finite sample sizes and uneven coverage.</p>
-        </div>
-      </div>
-    </section>
-
-    <section id="overall">
-      <div class="card">
-        <h2>Overall Ranking (Baseline Model)</h2>
-        <p>
-          We first present the baseline Bradley–Terry ranking estimated without style controls. This represents the aggregate human preference ordering, capturing both intrinsic model quality and any stylistic biases present in the evaluation data.
-        </p>
-
-        <h3>Learned Model Strengths</h3>
-        <p>
-          The heatmap visualization displays the learned strength parameters <span class="math-inline">θ<sub>i</sub></span> for each model, with darker colors indicating higher estimated strength. Models are ordered by their final rank, revealing the global preference hierarchy emergent from pairwise comparisons.
-        </p>
-
-        <div class="grid">
-          <figure>
-            <img src="results/figures/newplot%20(27).png" alt="Rank Heatmap Overall">
-            <figcaption><b>Figure 7:</b> Overall ranking heatmap showing model strength parameters learned from the Bradley–Terry model. Vertical ordering reflects the final leaderboard position.</figcaption>
-          </figure>
-        </div>
-
-        <h3>Empirical Win Rates vs. Model Predictions</h3>
-        <p>
-          To validate model fit, we compare empirical win fractions (raw data) against the Bradley–Terry model's predicted win probabilities. Strong agreement indicates that the model successfully captures the preference structure in the data.
-        </p>
-
-        <div class="grid two-col">
-          <figure>
-            <img src="results/figures/newplot%20(17).png" alt="Win Fraction Heatmap">
-            <figcaption><b>Figure 8:</b> Empirical win fraction matrix computed from non-tie battles. Each cell shows the proportion of times the row model defeated the column model.</figcaption>
-          </figure>
-
-          <figure>
-            <img src="results/figures/newplot%20(18).png" alt="Average Win Rate No Ties">
-            <figcaption><b>Figure 9:</b> Average win rate per model (excluding ties). While intuitive, this metric is presented for reference only—the Bradley–Terry strength parameters provide a more robust ranking measure.</figcaption>
-          </figure>
-        </div>
-
-        <h3>Robustness Check: Prompt Stratification</h3>
-        <p>
-          A key concern in preference-based evaluation is whether rankings are driven by a small set of frequently occurring prompts. To test robustness, we recompute win rates after removing the most common prompts and verify that the ranking order remains stable.
-        </p>
-
-        <div class="grid">
-          <figure>
-            <img src="results/figures/newplot%20(19).png" alt="Average Win Rate No Top Prompts">
-            <figcaption><b>Figure 10:</b> Win rates after excluding the most frequent prompts. Stability of rankings under this perturbation suggests that results are not overly dependent on a narrow subset of evaluation scenarios.</figcaption>
-          </figure>
-        </div>
-      </div>
-    </section>
-
-    <section id="confidence">
-      <div class="card">
-        <h2>Uncertainty Quantification: Bootstrap Confidence Intervals</h2>
-        <p>
-          Point estimates of model strength parameters provide a ranking, but without uncertainty quantification we cannot determine whether observed differences are statistically meaningful or attributable to sampling variability. Bootstrap resampling addresses this by constructing empirical confidence intervals.
-        </p>
-
-        <h3>Bootstrap Procedure</h3>
-        <p>
-          For each of <span class="math-inline">B</span> = 1000 bootstrap iterations, we:
-        </p>
-        <ul>
-          <li>Resample the complete battle dataset with replacement to obtain a bootstrap sample of equal size to the original data</li>
-          <li>Refit the Bradley–Terry model using maximum likelihood estimation on the bootstrap sample</li>
-          <li>Record the estimated strength parameter for each model</li>
-        </ul>
-        <p>
-          The resulting bootstrap distribution for each model's strength parameter enables construction of percentile-based 95% confidence intervals, which reflect uncertainty due to finite sample sizes, coverage imbalance, and stochastic variation in human preferences.
-        </p>
-
-        <h3>Interpreting Confidence Intervals</h3>
-        <p>
-          Wide confidence intervals indicate high uncertainty, typically arising from limited battle participation or inconsistent performance. Overlapping intervals between adjacent models suggest that their ranking difference may not be statistically significant. Conversely, models with non-overlapping intervals can be distinguished with high confidence.
-        </p>
-
-        <div class="grid">
-          <figure>
-            <img src="results/figures/newplot%20(26).png" alt="Model Scores with 95% CIs">
-            <figcaption><b>Figure 11:</b> Model strength estimates with bootstrapped 95% confidence intervals. Point estimates (centers) represent maximum likelihood values, while error bars indicate the range of plausible values given sampling uncertainty. Models are ordered by point estimate ranking.</figcaption>
-          </figure>
-        </div>
-
-        <div class="callout">
-          <div class="callout-title">Statistical Interpretation</div>
-          <p>Users should exercise caution when comparing models with overlapping confidence intervals. A ranking difference of, say, 2-3 positions may not be meaningful if uncertainty bands overlap substantially. For high-stakes applications, consider confidence interval width as an additional criterion alongside point estimates.</p>
-        </div>
-      </div>
-    </section>
-
-    <section id="length">
-      <div class="card">
-        <h2>Length Bias Analysis</h2>
-        <p>
-          A growing body of evidence suggests that human evaluators exhibit systematic preferences for longer responses, independent of content quality. This "length bias" phenomenon poses a significant threat to ranking validity, as models optimizing for verbosity may achieve inflated leaderboard positions without corresponding improvements in accuracy, helpfulness, or reasoning depth.
-        </p>
-
-        <h3>Hypothesis and Measurement</h3>
-        <p>
-          We test the hypothesis that response length is positively correlated with model ranking by computing the average token count (using GPT-2 tokenization) for each model's responses and examining the relationship between length and estimated strength parameters.
-        </p>
-        <p>
-          A significant positive correlation would indicate that longer responses confer a systematic advantage in human preference evaluations, potentially confounding our assessment of true model capability. This motivates the style-controlled ranking approach described in the next section.
-        </p>
-
-        <div class="grid">
-          <figure>
-            <img src="results/figures/newplot%20(28).png" alt="Average Response Length with Trendline">
-            <figcaption><b>Figure 12:</b> Average response length (in tokens) per model, ordered by baseline Bradley–Terry ranking. The fitted trendline reveals the strength of association between verbosity and leaderboard position. A steep positive slope indicates substantial length bias.</figcaption>
-          </figure>
-        </div>
-
-        <h3>Implications for Evaluation</h3>
-        <p>
-          If length bias is present, models that generate concise, efficient responses may be systematically undervalued, while verbose models with redundant content may be rewarded. This confound is particularly problematic for:
-        </p>
-        <ul>
-          <li><strong>Efficiency-focused applications:</strong> Use cases requiring concise answers (chatbots, quick queries) where verbosity is a liability rather than an asset</li>
-          <li><strong>Cost optimization:</strong> Longer responses incur higher API costs and latency; length bias may favor economically inefficient models</li>
-          <li><strong>Information density:</strong> Models that convey equivalent information more concisely demonstrate superior communication efficiency</li>
-        </ul>
-
-        <div class="callout warning">
-          <div class="callout-title">Methodological Note</div>
-          <p>The observed correlation between length and ranking does not necessarily imply causation. It's possible that stronger models naturally produce more comprehensive responses. However, controlled experiments and style-covariate modeling (next section) help disentangle these effects.</p>
-        </div>
-      </div>
-    </section>
-
-    <section id="stylecontrol">
-      <div class="card">
-        <h2>Style-Controlled Ranking: Isolating Content Quality</h2>
-        <p>
-          To address the confounding effects of stylistic presentation on perceived model quality, we extend the Bradley–Terry framework to include explicit covariate controls for response formatting characteristics. This approach enables us to separate <em>intrinsic content quality</em> from <em>superficial presentation effects</em>.
-        </p>
-
-        <h3>Style Feature Engineering</h3>
-        <p>
-          We extract four key stylistic dimensions from each model response:
-        </p>
-        <ul>
-          <li><strong>Response Length:</strong> Token count using GPT-2 tokenization (primary length metric)</li>
-          <li><strong>Header Usage:</strong> Count of markdown headers (H1-H6), indicating structural organization</li>
-          <li><strong>List Presence:</strong> Count of bulleted and numbered lists, reflecting formatting style</li>
-          <li><strong>Bold Emphasis:</strong> Frequency of bold text usage for highlighting key points</li>
-        </ul>
-        <p>
-          For each battle between models <span class="math-inline">i</span> and <span class="math-inline">j</span>, we compute the normalized difference Δ<sub>feature</sub> = (feature<sub>i</sub> − feature<sub>j</sub>) / σ<sub>feature</sub>, where σ denotes the standard deviation across all responses. This z-score normalization ensures that coefficients <span class="math-inline">β</span> are interpretable as the effect of a one-standard-deviation change in the feature.
-        </p>
-
-        <h3>Joint Model Specification</h3>
-        <p>
-          The style-controlled model augments the design matrix with normalized style differences as additional predictors:
-        </p>
-        
-        <div class="math-block">
-          logit(P(i beats j)) = θ<sub>i</sub> − θ<sub>j</sub> + Σ<sub>k</sub> β<sub>k</sub> · Δfeature<sub>k</sub>
-        </div>
-        
-        <p>
-          Here, <span class="math-inline">θ<sub>i</sub></span> represents the style-adjusted intrinsic strength of model <span class="math-inline">i</span>, while the <span class="math-inline">β</span> coefficients quantify how much each stylistic dimension independently contributes to win probability. A positive <span class="math-inline">β<sub>length</sub></span>, for example, indicates that longer responses are preferred after controlling for model identity.
-        </p>
-
-        <h3>Ranking Comparison: Baseline vs. Style-Controlled</h3>
-        <p>
-          By comparing the baseline ranking (which conflates style and content) with the style-controlled ranking (which isolates content quality), we can identify models whose leaderboard positions are inflated or deflated by stylistic factors. Large shifts in rank indicate that a model's original placement was substantially driven by formatting choices rather than response quality.
-        </p>
-
-        <div class="grid">
-          <figure>
-            <img src="results/figures/newplot%20(29).png" alt="With and Without Style Control">
-            <figcaption><b>Figure 13:</b> Rank comparison between baseline and style-controlled leaderboards. Lines connect each model's position in both rankings. Large vertical displacements indicate models whose rankings are heavily influenced by stylistic factors. Upward movement (left to right) suggests the model was penalized by its presentation style; downward movement indicates style-driven rank inflation.</figcaption>
-          </figure>
-        </div>
-
-        <h3>Style Feature Effect Sizes</h3>
-        <p>
-          The estimated coefficients <span class="math-inline">β</span> with their confidence intervals reveal which stylistic dimensions most strongly influence human preferences. These coefficients represent the causal effect of each feature on win probability, holding model identity and other features constant.
-        </p>
-
-        <div class="grid">
-          <figure>
-            <img src="results/figures/newplot%20(30).png" alt="Style Feature Coefficients">
-            <figcaption><b>Figure 14:</b> Estimated style feature coefficients with 95% bootstrap confidence intervals. Response length typically dominates other formatting features. Positive coefficients indicate preference for more of that feature; negative coefficients suggest the feature is detrimental to perceived quality. The magnitude represents the log-odds change in win probability per standard deviation increase in the feature.</figcaption>
-          </figure>
-        </div>
-
-        <div class="callout">
-          <div class="callout-title">Interpretation: Length Coefficient</div>
-          <p>If β<sub>length</sub> ≈ 0.5, this implies that a model producing responses one standard deviation longer than a competitor has approximately exp(0.5) ≈ 1.65× higher odds of winning, all else equal. This quantifies the magnitude of length bias in human evaluations.</p>
-        </div>
-
-        <h3>Implications for Model Development</h3>
-        <p>
-          The style-controlled ranking provides actionable insights for model developers:
-        </p>
-        <ul class="key-points">
-          <li>Models that rank higher after style control demonstrate genuine content quality improvements</li>
-          <li>Models that drop significantly may be over-optimizing for stylistic presentation</li>
-          <li>Feature coefficients reveal which formatting strategies are most effective for user satisfaction</li>
-          <li>Training objectives can be adjusted to balance content quality with appropriate presentation style</li>
-        </ul>
-      </div>
-    </section>
-
-    <section id="categories">
-      <div class="card">
-        <h2>Category-Specific Rankings: Domain Expertise Analysis</h2>
-        <p>
-          Model capabilities are rarely uniform across task domains. A model that excels at code generation may underperform on creative writing, while strong mathematical reasoning ability does not guarantee proficiency in instruction following. To capture this heterogeneity, we partition the battle dataset by task category and estimate domain-specific Bradley–Terry rankings.
-        </p>
-
-        <h3>Category Taxonomy</h3>
-        <p>
-          Prompts are classified into the following categories based on their primary cognitive demand:
-        </p>
-        <ul>
-          <li><strong>Code Generation:</strong> Programming tasks, debugging, algorithm implementation</li>
-          <li><strong>Mathematical Reasoning:</strong> Problem-solving requiring quantitative analysis and formal logic</li>
-          <li><strong>Instruction Following:</strong> Tasks evaluating adherence to specific constraints and guidelines</li>
-          <li><strong>Creative Writing:</strong> Open-ended generation requiring originality and narrative coherence</li>
-          <li><strong>Technical Accuracy:</strong> Factual questions demanding domain expertise and precision</li>
-        </ul>
-
-        <h3>Cross-Category Performance Patterns</h3>
-        <p>
-          The multi-category heatmap visualization reveals how model rankings shift across domains. Diagonal consistency indicates generalist capability, while off-diagonal variation suggests specialization. Some models demonstrate remarkable consistency (strong across all categories), while others exhibit "spiky" profiles with pronounced strengths and weaknesses.
-        </p>
-
-        <div class="grid">
-          <figure>
-            <img src="results/figures/newplot%20(22).png" alt="Overall and Per-Category Ranks">
-            <figcaption><b>Figure 15:</b> Comprehensive view of overall and category-specific rankings. Each column represents a different task domain, while rows correspond to models. Color intensity reflects ranking position within each category. This visualization enables rapid identification of domain specialists vs. generalist models.</figcaption>
-          </figure>
-        </div>
-
-        <h3>Prompt Clustering Analysis</h3>
-        <p>
-          To validate our category assignments and explore the latent structure of the prompt space, we perform embedding-based clustering analysis. Prompts are encoded using sentence transformers, then clustered using k-means to reveal natural groupings based on semantic similarity.
-        </p>
-
-        <div class="grid two-col">
-          <figure>
-            <img src="results/figures/newplot%20(23).png" alt="Runtime vs K">
-            <figcaption><b>Figure 16:</b> Computational cost (runtime) as a function of cluster count K. This informs the practical feasibility of fine-grained prompt categorization.</figcaption>
-          </figure>
-
-          <figure>
-            <img src="results/figures/newplot%20(24).png" alt="Elbow Plot Inertia vs K">
-            <figcaption><b>Figure 17:</b> Elbow plot showing within-cluster sum of squares (inertia) vs. K. The "elbow" point represents the optimal trade-off between model complexity and clustering quality, informing our choice of category granularity.</figcaption>
-          </figure>
-        </div>
-
-        <h3>Prompt Space Geometry</h3>
-        <p>
-          Low-dimensional embeddings of the prompt space reveal the geometric structure of evaluation scenarios. Tight clusters indicate well-defined task categories, while diffuse regions suggest ambiguous or multi-faceted prompts that span category boundaries.
-        </p>
-
-        <div class="grid">
-          <figure>
-            <img src="results/figures/newplot%20(25).png" alt="2D Prompt Cluster Visualization">
-            <figcaption><b>Figure 18:</b> Two-dimensional UMAP projection of prompt embeddings, colored by assigned cluster. Spatial proximity indicates semantic similarity. Clear cluster separation validates the coherence of our category taxonomy.</figcaption>
-          </figure>
-        </div>
-
-        <h3>Category Coverage and Statistical Power</h3>
-        <p>
-          Not all categories are equally represented in the dataset. Skewed category distributions affect the reliability of domain-specific rankings, with well-covered categories yielding more stable estimates than sparse categories.
-        </p>
-
-        <div class="grid">
-          <figure>
-            <img src="results/figures/newplot%20(20).png" alt="Proportion of Battles in Each Category">
-            <figcaption><b>Figure 19:</b> Distribution of battles across task categories. Categories with larger proportions enable more statistically reliable ranking estimates. Sparse categories should be interpreted with appropriate caution due to limited sample sizes.</figcaption>
-          </figure>
-        </div>
-
-        <div class="callout info">
-          <div class="callout-title">Practical Applications</div>
-          <p>Category-specific rankings enable practitioners to select models optimized for their specific use case. A code-heavy application should prioritize models with strong programming rankings, while customer service chatbots might prioritize instruction-following capability. The overall ranking serves as a general-purpose benchmark, but domain-specific performance is often more decision-relevant.</p>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <div class="card">
-        <h2>Conclusions and Future Directions</h2>
-        
-        <h3>Key Findings</h3>
-        <p>
-          This analysis demonstrates that rigorous statistical methodology can extract meaningful signal from noisy preference data while explicitly accounting for confounding factors. Our main findings include:
-        </p>
-        <ul class="key-points">
-          <li>The Bradley–Terry model provides a principled framework for learning consistent global rankings from imbalanced pairwise comparisons, with bootstrap confidence intervals quantifying estimation uncertainty</li>
-          <li>Response length exhibits substantial positive correlation with human preferences, suggesting systematic length bias in evaluation protocols</li>
-          <li>Style-controlled rankings reveal that some models' leaderboard positions are significantly inflated by stylistic presentation rather than content quality</li>
-          <li>Domain-specific rankings uncover heterogeneous capability profiles, with models demonstrating varying degrees of specialization vs. generalist competence</li>
-        </ul>
-
-        <h3>Methodological Contributions</h3>
-        <p>
-          Beyond empirical findings, this project advances evaluation methodology by:
-        </p>
-        <ul>
-          <li>Implementing explicit covariate control for stylistic confounds in preference-based ranking</li>
-          <li>Providing uncertainty quantification through non-parametric bootstrap inference</li>
-          <li>Demonstrating the value of category-stratified analysis for understanding domain-specific capabilities</li>
-          <li>Establishing a reproducible pipeline for rigorous leaderboard construction from battle data</li>
-        </ul>
-
-        <h3>Limitations and Caveats</h3>
-        <p>
-          Several important limitations warrant acknowledgment:
-        </p>
-        <ul>
-          <li><strong>Evaluation Population:</strong> Human preferences reflect the specific evaluator pool, which may not represent all user demographics or use cases</li>
-          <li><strong>Prompt Distribution:</strong> Rankings are conditional on the distribution of evaluation prompts; shifting to different task mixtures would alter relative model performance</li>
-          <li><strong>Style Feature Completeness:</strong> Our style controls capture major formatting dimensions but may miss subtle presentation effects (tone, conciseness, structure)</li>
-          <li><strong>Temporal Validity:</strong> Model capabilities evolve rapidly; rankings represent a snapshot at data collection time</li>
-        </ul>
-
-        <h3>Future Research Directions</h3>
-        <p>
-          This work opens several avenues for future investigation:
-        </p>
-        <ul class="key-points">
-          <li><strong>Causal Inference:</strong> Experimental designs that randomly assign style features to isolate causal effects beyond observational correlation</li>
-          <li><strong>User Heterogeneity:</strong> Mixed-effects models capturing evaluator-specific preferences and systematic disagreement</li>
-          <li><strong>Dynamic Rankings:</strong> Time-varying Bradley–Terry models that track evolving model capabilities across training iterations</li>
-          <li><strong>Multi-Objective Optimization:</strong> Pareto frontier analysis balancing content quality, efficiency, and safety constraints</li>
-          <li><strong>Active Learning:</strong> Optimal experimental design for pairwise comparisons that minimize uncertainty in ranking estimates</li>
-        </ul>
-
-        <div class="callout">
-          <div class="callout-title">Reproducibility</div>
-          <p>All analysis code, data preprocessing pipelines, and visualization scripts are available in the project repository. The bootstrap procedure is fully deterministic given a fixed random seed, ensuring exact reproducibility of all reported results and confidence intervals.</p>
-        </div>
-      </div>
-    </section>
-
-    <footer>
+      <h2>2. Statistical Methodology</h2>
       <p>
-        <strong>Style-Aware LLM Ranking Report</strong> | Bradley–Terry Model with Bootstrap Inference and Covariate Control
+        To move beyond simple win rates, we employ the <strong>Bradley–Terry (BT) model</strong>, a standard in psychometrics for pairwise comparisons. This probabilistic model assumes that the probability of model $i$ beating model $j$ depends on the difference in their latent strength parameters, $\theta$.
       </p>
-      <p style="margin-top: 12px;">
-        Generated from pairwise battle data with statistical rigor and transparency. All figures and analyses are reproducible from the source repository.
+
+      <h3>The Standard Model</h3>
+      <div class="math-block">
+        P(i \succ j) = \frac{1}{1 + e^{-(\theta_i - \theta_j)}}
+      </div>
+      <p>
+        Where $\theta_i$ is the intrinsic skill of model $i$. We estimate these parameters via Maximum Likelihood Estimation (MLE) by minimizing the negative log-likelihood of the observed battle outcomes.
       </p>
-    </footer>
-  </div>
+
+      <h3>The Style-Adjusted Model</h3>
+      <p>
+        Human annotators are imperfect. They may be swayed by superficial formatting (bold text, headers) or verbosity. To isolate "true" quality, we introduce a vector of style covariates $S_{ij}$ (e.g., difference in length, difference in markdown usage).
+      </p>
+      <div class="math-block">
+         P(i \succ j) = \sigma(\theta_i - \theta_j + \beta^T \cdot S_{ij})
+      </div>
+      <p>
+        Here, $\beta$ represents the coefficients for stylistic features. If $\beta_{length}$ is positive and significant, it proves that users prefer longer answers <em>regardless of the model's identity</em>. The adjusted ranking is derived from $\theta$ after controlling for these $\beta$ terms.
+      </p>
+
+      <h3>Uncertainty Quantification</h3>
+      <p>
+        We use <strong>Bootstrap Resampling</strong> ($N=1000$) to generate 95% Confidence Intervals (CIs). This ensures we do not over-interpret small differences in rank between models with overlapping performance bands.
+      </p>
+      <figure class="figure-card" style="max-width: 800px; margin: 0 auto;">
+        <img src="results/figures/newplot%20(26).png" alt="Bradley-Terry Scores with CI">
+        <figcaption>
+          <strong>Figure 7: Model Strength Estimates ($\theta$) with 95% CIs.</strong>
+          The error bars represent the stability of the ranking. Overlapping bars indicate statistical ties.
+        </figcaption>
+      </figure>
+    </section>
+
+    <section id="baseline-results">
+      <h2>3. Baseline Rankings (Uncontrolled)</h2>
+      <p>
+        Before applying corrections, we examine the standard "Leaderboard" view. This represents the raw preference of the human crowd, incorporating all biases.
+      </p>
+
+      <div class="grid-2">
+        <figure class="figure-card">
+          <img src="results/figures/newplot%20(27).png" alt="Overall Rank Heatmap">
+          <figcaption><strong>Figure 8:</strong> Overall Model Ranking (Heatmap View).</figcaption>
+        </figure>
+        <figure class="figure-card">
+          <img src="results/figures/newplot%20(17).png" alt="Pairwise Win Rate Matrix">
+          <figcaption><strong>Figure 9:</strong> Empirical Pairwise Win-Rates. Darker squares indicate higher dominance.</figcaption>
+        </figure>
+      </div>
+
+      <h4>Robustness Check</h4>
+      <p>Are these rankings driven only by the most popular prompts? We re-ran the analysis excluding the top prompts to check for "overfitting" to common queries.</p>
+      <div class="grid-2">
+        <figure class="figure-card">
+          <img src="results/figures/newplot%20(18).png" alt="Average Win Rate">
+          <figcaption><strong>Figure 10:</strong> Average Win Rate (Global).</figcaption>
+        </figure>
+        <figure class="figure-card">
+          <img src="results/figures/newplot%20(19).png" alt="Win Rate excluding top prompts">
+          <figcaption><strong>Figure 11:</strong> Win Rate excluding top frequent prompts. The high correlation suggests the rankings are robust to prompt distribution.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="length-bias">
+      <h2>4. The Length Bias Problem</h2>
+      <p>
+        A critical finding of this report is the strong correlation between <strong>verbosity</strong> and <strong>rank</strong>. Evaluators systematically prefer longer responses, even when the content quality might be equivalent.
+      </p>
+
+      <figure class="figure-card">
+        <img src="results/figures/newplot%20(28).png" alt="Response length vs Rank">
+        <figcaption>
+          <strong>Figure 12: Verbosity vs. Rank Correlation.</strong>
+          Models are ordered by their baseline rank (x-axis). The y-axis shows average response length in tokens. The trend line is undeniably positive: higher-ranked models tend to be significantly more verbose.
+        </figcaption>
+      </figure>
+
+      <div class="insight-box" style="border-left-color: var(--accent-warning);">
+        <span class="insight-title" style="color: var(--accent-warning);">Bias Alert</span>
+        <p>
+          This correlation poses a risk to the ecosystem: it encourages "bloat." If developers optimize purely for leaderboard rank, they may fine-tune models to output filler text rather than concise, helpful answers.
+        </p>
+      </div>
+    </section>
+
+    <section id="style-control">
+      <h2>5. Style-Controlled Results</h2>
+      <p>
+        By applying the style-adjusted Bradley-Terry model, we can estimate the impact of formatting features ($\beta$) and derive a "purified" ranking ($\theta$).
+      </p>
+
+      <h3>Feature Importance</h3>
+      <p>Which superficial features matter most? We analyzed Length, Bold tags, LaTeX usage, and List formatting.</p>
+      
+      <figure class="figure-card">
+        <img src="results/figures/newplot%20(30).png" alt="Style coefficients">
+        <figcaption>
+          <strong>Figure 13: Style Coefficients ($\beta$).</strong>
+          The coefficient for "Length" is the largest and most positive. This confirms that, holding content constant, simply writing <em>more</em> increases the probability of winning a battle.
+        </figcaption>
+      </figure>
+
+      <h3>The "True" Ranking</h3>
+      <p>
+        Figure 14 compares the Baseline Rank vs. the Style-Controlled Rank. Shifts in this chart are revealing:
+      </p>
+      <ul>
+        <li><strong>Downward Shift:</strong> Models that lose rank (move down) when style is controlled were likely "gaming" the system with verbosity or formatting.</li>
+        <li><strong>Upward Shift:</strong> Models that gain rank are concise, high-quality models that were previously unfairly penalized for being brief.</li>
+      </ul>
+
+      <figure class="figure-card">
+        <img src="results/figures/newplot%20(29).png" alt="Rank Shift Comparison">
+        <figcaption><strong>Figure 14:</strong> The "Shakedown." Comparing Baseline vs. Style-Controlled rankings.</figcaption>
+      </figure>
+    </section>
+
+    <section id="domain-analysis">
+      <h2>6. Domain Specificity</h2>
+      <p>
+        General capability is a useful metric, but practical applications are often domain-specific. We clustered prompts into semantic categories (Coding, Math, Creative Writing, etc.) using embedding vectors (SVD visualization below).
+      </p>
+
+      <div class="grid-2">
+        <figure class="figure-card">
+          <img src="results/figures/newplot%20(23).png" alt="Clustering Runtime">
+          <figcaption><strong>Figure 15:</strong> Clustering Runtime Analysis.</figcaption>
+        </figure>
+        <figure class="figure-card">
+          <img src="results/figures/newplot%20(24).png" alt="Clustering Elbow Plot">
+          <figcaption><strong>Figure 16:</strong> Elbow Plot to determine optimal $K$ categories.</figcaption>
+        </figure>
+      </div>
+
+      <div class="grid-2">
+        <figure class="figure-card">
+          <img src="results/figures/newplot%20(25).png" alt="SVD of Prompts">
+          <figcaption><strong>Figure 17:</strong> Semantic Projection (SVD) of the prompt space. Distinct clusters emerge for coding (dense) vs. creative writing (diffuse).</figcaption>
+        </figure>
+        <figure class="figure-card">
+          <img src="results/figures/newplot%20(20).png" alt="Battles per category">
+          <figcaption><strong>Figure 18:</strong> Distribution of battles across identified categories.</figcaption>
+        </figure>
+      </div>
+
+      <h3>Category-Specific Leaderboards</h3>
+      <p>
+        Finally, we fit separate Bradley-Terry models for each category. Figure 19 reveals the specialists. Note how some models dominate "Code" but struggle in "Creative Writing."
+      </p>
+      
+      <figure class="figure-card">
+        <img src="results/figures/newplot%20(22).png" alt="Category Heatmap">
+        <figcaption>
+          <strong>Figure 19: Category-Specific Rank Heatmap.</strong>
+          Darker blue indicates a higher rank (Model 1 is best). This visualization allows users to select the best model for their specific use case.
+        </figcaption>
+      </figure>
+    </section>
+
+    <section id="conclusion">
+      <h2>7. Conclusion</h2>
+      <p>
+        This report demonstrates that while crowdsourced evaluation is a powerful signal, it is noisy and biased. A raw win-rate leaderboard incentivizes verbosity and overlooks the nuances of domain specialization.
+      </p>
+      <p>
+        <strong>Key Takeaways:</strong>
+      </p>
+      <ul>
+        <li><strong>Statistical Rigor:</strong> The Bradley-Terry model with bootstrap intervals provides a necessary safety margin against over-interpreting close ranks.</li>
+        <li><strong>The Verbosity Trap:</strong> Length bias is real and significant ($p < 0.05$). Future evaluations must control for this to encourage efficiency.</li>
+        <li><strong>No One Size Fits All:</strong> The category heatmaps show that "General Purpose" models often lag behind specialists in Code and Math.</li>
+      </ul>
+    </section>
+  </main>
+</div>
+
 </body>
 </html>
