@@ -3,579 +3,555 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Style-Aware LLM Ranking | Technical Report</title>
-  <meta name="description" content="A rigorous statistical framework for ranking large language models using the Bradley–Terry model with covariate control for stylistic biases.">
+  <title>Style-Aware LLM Ranking | Research Report</title>
   
   <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
   <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300&display=swap" rel="stylesheet">
 
   <style>
     :root {
-      /* Modern Deep Dark Palette */
-      --bg-body: #050505;
-      --bg-sidebar: rgba(10, 10, 10, 0.85); /* Semi-transparent */
+      /* Palette: Modern Editorial (Light Mode) */
+      --color-sidebar-bg: #0f172a; /* Slate 900 */
+      --color-sidebar-text: #e2e8f0;
       
-      --card-bg: #111111;
-      --card-border: #2a2a2a;
+      --color-body-bg: #f8fafc; /* Slate 50 */
+      --color-card-bg: #ffffff;
       
-      --text-primary: #ededed;
-      --text-secondary: #a1a1a1;
-      --text-accent: #ffffff;
+      --color-text-main: #334155; /* Slate 700 */
+      --color-text-heading: #1e293b; /* Slate 800 */
+      --color-text-muted: #64748b; /* Slate 500 */
       
-      --accent-blue: #3b82f6;
-      --accent-purple: #8b5cf6;
-      --accent-glow: rgba(59, 130, 246, 0.15);
+      --color-accent-primary: #4f46e5; /* Indigo 600 */
+      --color-accent-secondary: #0ea5e9; /* Sky 500 */
+      --color-accent-highlight: #818cf8;
       
+      --border-subtle: #e2e8f0;
+      --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --shadow-float: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      
+      --font-body: 'Merriweather', serif;
       --font-ui: 'Inter', sans-serif;
-      --font-serif: 'Playfair Display', serif;
       --font-mono: 'JetBrains Mono', monospace;
       
-      --sidebar-width: 280px;
+      --sidebar-width: 300px;
     }
 
-    /* Reset & Base */
     * { box-sizing: border-box; }
     
     html { scroll-behavior: smooth; }
-    
+
     body {
       margin: 0;
-      padding: 0;
-      background-color: var(--bg-body);
-      color: var(--text-primary);
-      font-family: var(--font-ui);
-      line-height: 1.7;
-      font-size: 17px;
-      /* Subtle noise texture or gradient */
-      background-image: radial-gradient(circle at 50% 0%, #1a1d26 0%, #050505 60%);
-      background-attachment: fixed;
+      background-color: var(--color-body-bg);
+      color: var(--color-text-main);
+      font-family: var(--font-body);
+      line-height: 1.8;
+      font-size: 18px; /* Improved readability */
     }
 
-    a { color: var(--accent-blue); text-decoration: none; transition: 0.2s; }
-    a:hover { color: var(--accent-purple); text-decoration: underline; text-decoration-color: rgba(139, 92, 246, 0.4); }
-
     /* Layout */
-    .app-container {
+    .layout {
       display: flex;
       min-height: 100vh;
     }
 
-    /* Glassmorphism Sidebar */
+    /* SIDEBAR DESIGN */
     .sidebar {
       width: var(--sidebar-width);
-      height: 100vh;
+      background-color: var(--color-sidebar-bg);
+      color: var(--color-sidebar-text);
       position: sticky;
       top: 0;
-      background: var(--bg-sidebar);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-right: 1px solid var(--card-border);
-      padding: 2.5rem 2rem;
+      height: 100vh;
+      overflow-y: auto;
+      flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      flex-shrink: 0;
-      z-index: 100;
+      padding: 2.5rem 2rem;
+      /* Subtle pattern for texture */
+      background-image: radial-gradient(circle at top left, #1e293b, transparent 40%);
     }
 
     .brand {
-      font-family: var(--font-serif);
-      font-weight: 700;
-      font-size: 1.4rem;
-      color: var(--text-accent);
-      margin-bottom: 2.5rem;
-      letter-spacing: -0.01em;
-      background: linear-gradient(90deg, #fff, #a1a1a1);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      font-family: var(--font-ui);
+      font-weight: 800;
+      font-size: 1.25rem;
+      letter-spacing: -0.02em;
+      margin-bottom: 3rem;
+      color: #fff;
     }
 
     .nav-links {
       list-style: none;
       padding: 0;
       margin: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
+      font-family: var(--font-ui);
+    }
+
+    .nav-links li {
+      margin-bottom: 0.5rem;
     }
 
     .nav-links a {
       display: block;
-      padding: 0.7rem 0.5rem;
-      font-size: 0.9rem;
-      color: var(--text-secondary);
-      border-right: 2px solid transparent;
-      transition: all 0.2s ease;
+      color: #94a3b8;
+      text-decoration: none;
+      font-size: 0.95rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      transition: all 0.2s;
     }
 
     .nav-links a:hover {
-      color: var(--text-primary);
-      transform: translateX(4px);
-      text-decoration: none;
+      color: #fff;
+      padding-left: 8px; /* Slide effect */
+      border-color: rgba(255,255,255,0.2);
     }
 
-    .sidebar-footer {
+    .nav-footer {
       margin-top: auto;
-      font-size: 0.75rem;
-      color: #555;
-      border-top: 1px solid var(--card-border);
-      padding-top: 1.5rem;
+      padding-top: 2rem;
+      font-size: 0.8rem;
+      color: #64748b;
+      font-family: var(--font-ui);
     }
 
-    /* Main Content */
+    /* MAIN CONTENT */
     main {
       flex: 1;
-      padding: 4rem 5rem;
-      max-width: 1600px; /* Wider for bigger images */
+      padding: 5rem 6rem;
+      max-width: 1400px;
       margin: 0 auto;
     }
 
-    /* Typography */
+    /* TYPOGRAPHY */
+    h1, h2, h3 {
+      font-family: var(--font-ui);
+      color: var(--color-text-heading);
+      margin-top: 0;
+    }
+
     h1 {
-      font-family: var(--font-serif);
       font-size: 3.5rem;
-      font-weight: 700;
+      font-weight: 900;
       line-height: 1.1;
-      margin: 0 0 1.5rem 0;
-      background: linear-gradient(135deg, #ffffff 0%, #94a3b8 100%);
+      letter-spacing: -0.03em;
+      margin-bottom: 1.5rem;
+      /* Engaging Gradient Text */
+      background: linear-gradient(135deg, var(--color-text-heading) 0%, var(--color-accent-primary) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
     h2 {
-      font-family: var(--font-serif);
-      font-size: 2.2rem;
+      font-size: 2rem;
+      font-weight: 700;
       margin-top: 5rem;
       margin-bottom: 1.5rem;
-      color: var(--text-accent);
-      border-bottom: 1px solid var(--card-border);
       padding-bottom: 1rem;
+      border-bottom: 2px solid var(--color-accent-primary);
       display: inline-block;
     }
 
     h3 {
       font-size: 1.5rem;
-      color: var(--text-primary);
-      margin-top: 2.5rem;
       font-weight: 600;
+      margin-top: 3rem;
+      margin-bottom: 1rem;
     }
 
     p {
-      margin-bottom: 1.5rem;
-      color: var(--text-secondary);
-      font-size: 1.05rem;
-      max-width: 800px; /* Keep text readable width, but let images go wide */
-      line-height: 1.8;
+      margin-bottom: 1.75rem;
     }
 
-    strong { color: var(--text-primary); font-weight: 600; }
+    a.text-link {
+      color: var(--color-accent-primary);
+      text-decoration: underline;
+      text-decoration-thickness: 2px;
+      text-underline-offset: 2px;
+      text-decoration-color: rgba(79, 70, 229, 0.2);
+    }
+    a.text-link:hover {
+      text-decoration-color: var(--color-accent-primary);
+    }
 
-    /* Abstract / Intro Box */
-    .abstract {
-      border: 1px solid var(--card-border);
-      background: linear-gradient(180deg, rgba(20,20,20,0.5), rgba(10,10,10,0.5));
-      padding: 2rem;
-      border-radius: 8px;
-      margin-bottom: 3rem;
-      max-width: 900px;
+    /* COMPONENTS */
+    
+    /* Abstract Box */
+    .abstract-box {
+      background: linear-gradient(135deg, #e0e7ff 0%, #f0f9ff 100%);
+      border-left: 6px solid var(--color-accent-primary);
+      padding: 2.5rem;
+      border-radius: 0 12px 12px 0;
+      margin: 3rem 0;
+      position: relative;
+    }
+    .abstract-label {
+      font-family: var(--font-ui);
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-accent-primary);
+      display: block;
+      margin-bottom: 0.75rem;
     }
 
     /* Tags */
-    .tags { display: flex; gap: 0.75rem; margin: 1.5rem 0 2rem; flex-wrap: wrap; }
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+    }
     .tag {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      padding: 6px 12px;
-      border-radius: 4px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid var(--card-border);
-      color: var(--text-secondary);
+      background: #fff;
+      border: 1px solid var(--border-subtle);
+      color: var(--color-text-muted);
+      font-family: var(--font-ui);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 99px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
 
-    /* Images & Grid */
-    .grid-large {
-      display: grid;
-      /* Default to 2 columns, but with a large minimum width per item */
-      grid-template-columns: repeat(auto-fit, minmax(600px, 1fr)); 
-      gap: 2.5rem;
-      margin: 3rem 0;
-      width: 100%;
-    }
-
-    .figure-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
+    /* Insight Box (Colorful) */
+    .insight {
+      background: #fff;
       border-radius: 12px;
+      padding: 2rem;
+      margin: 2.5rem 0;
+      box-shadow: var(--shadow-card);
+      border: 1px solid var(--border-subtle);
+      display: flex;
+      gap: 1.5rem;
+      align-items: flex-start;
+    }
+    
+    .insight-icon {
+      background: #dbeafe;
+      color: #2563eb;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      flex-shrink: 0;
+    }
+    
+    .insight-content h4 {
+      font-family: var(--font-ui);
+      margin: 0 0 0.5rem 0;
+      font-size: 1.1rem;
+      color: var(--color-text-heading);
+    }
+    .insight-content p {
+      margin: 0;
+      font-size: 1rem;
+      color: var(--color-text-muted);
+    }
+
+    /* Math Blocks */
+    .math-container {
+      background: #fff;
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+      padding: 2rem;
+      margin: 2rem 0;
+      text-align: center;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+      font-size: 1.1rem;
+      overflow-x: auto;
+    }
+
+    /* FIGURE GRID */
+    .figure-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(550px, 1fr));
+      gap: 2.5rem;
+      margin: 3.5rem 0;
+    }
+
+    .fig-card {
+      background: var(--color-card-bg);
+      border-radius: 16px;
       overflow: hidden;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      box-shadow: var(--shadow-card);
+      transition: all 0.3s ease;
+      border: 1px solid var(--border-subtle);
     }
 
-    .figure-card:hover {
+    .fig-card:hover {
+      box-shadow: var(--shadow-float);
       transform: translateY(-4px);
-      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
-      border-color: #333;
     }
 
-    .figure-card img {
+    .fig-card img {
       width: 100%;
       height: auto;
       display: block;
-      /* Ensure pure black backgrounds in plots blend in, or contrast slightly */
-      background: #0d0d0d; 
+      border-bottom: 1px solid var(--border-subtle);
     }
 
     figcaption {
-      padding: 1.25rem 1.5rem;
-      font-family: var(--font-ui);
-      font-size: 0.9rem;
-      color: #888;
-      border-top: 1px solid var(--card-border);
-      background: #0f0f0f;
-    }
-
-    figcaption b { color: var(--text-primary); margin-right: 6px; }
-
-    /* Math Styling */
-    .math-block {
-      background: #0c0c0c;
-      border: 1px solid var(--card-border);
-      border-left: 3px solid var(--accent-blue);
       padding: 1.5rem;
-      margin: 2rem 0;
-      border-radius: 0 8px 8px 0;
-      overflow-x: auto;
-      text-align: center;
-      font-size: 1.25rem;
+      font-family: var(--font-ui);
+      font-size: 0.95rem;
+      color: var(--color-text-muted);
+      background: #fdfdfd;
     }
 
-    /* Insights */
-    .insight-box {
-      background: rgba(59, 130, 246, 0.05);
-      border: 1px solid rgba(59, 130, 246, 0.1);
-      padding: 1.5rem 2rem;
-      border-radius: 8px;
-      margin: 2rem 0;
-      max-width: 900px;
-    }
-    
-    .insight-header {
-      color: var(--accent-blue);
-      font-weight: 700;
-      text-transform: uppercase;
-      font-size: 0.8rem;
-      letter-spacing: 0.1em;
-      margin-bottom: 0.75rem;
+    figcaption strong {
+      color: var(--color-text-heading);
       display: block;
+      margin-bottom: 0.4rem;
     }
-
-    /* List styling */
-    ul { padding-left: 1.2rem; color: var(--text-secondary); max-width: 800px;}
-    li { margin-bottom: 0.75rem; }
-    li::marker { color: var(--card-border); }
 
     /* Responsive */
-    @media (max-width: 1100px) {
-      .app-container { flex-direction: column; }
-      .sidebar { width: 100%; height: auto; position: relative; border-right: none; border-bottom: 1px solid var(--card-border); padding: 1.5rem; }
-      .nav-links { flex-direction: row; flex-wrap: wrap; gap: 1rem; }
-      .nav-links a { border-right: none; border-bottom: 2px solid transparent; }
-      main { padding: 2rem; }
+    @media (max-width: 1000px) {
+      .layout { flex-direction: column; }
+      .sidebar { 
+        width: 100%; 
+        height: auto; 
+        position: relative;
+        padding: 2rem; 
+      }
+      .nav-links { display: flex; flex-wrap: wrap; gap: 1.5rem; }
+      .nav-links a { border-bottom: none; padding: 0.5rem 0; }
+      
+      main { padding: 3rem 2rem; }
       h1 { font-size: 2.5rem; }
-      .grid-large { grid-template-columns: 1fr; } /* Force single column on smaller screens */
+      .figure-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
 
-<div class="app-container">
+<div class="layout">
   
   <aside class="sidebar">
-    <div class="brand">LLM Rankings</div>
-    <nav>
-      <ul class="nav-links">
-        <li><a href="#summary">Executive Summary</a></li>
-        <li><a href="#data">Data Landscape</a></li>
-        <li><a href="#methodology">Methodology</a></li>
-        <li><a href="#baseline">Baseline Rankings</a></li>
-        <li><a href="#bias">The Length Bias</a></li>
-        <li><a href="#style">Style Control</a></li>
-        <li><a href="#domain">Domain Specificity</a></li>
-        <li><a href="#conclusion">Conclusion</a></li>
-      </ul>
-    </nav>
-    <div class="sidebar-footer">
-      <p>Dec 2025 Release<br>GitHub Pages Deployment</p>
+    <div class="brand">Research Report</div>
+    <ul class="nav-links">
+      <li><a href="#summary">Executive Summary</a></li>
+      <li><a href="#data">1. Data Landscape</a></li>
+      <li><a href="#methodology">2. Methodology</a></li>
+      <li><a href="#baseline">3. Baseline Results</a></li>
+      <li><a href="#bias">4. The Length Bias</a></li>
+      <li><a href="#style">5. Style Control</a></li>
+      <li><a href="#domain">6. Domain Analysis</a></li>
+    </ul>
+    <div class="nav-footer">
+      Generated: Dec 2025<br>
+      Status: <strong>Final</strong>
     </div>
   </aside>
 
   <main>
+    
     <section id="summary">
       <h1>Style-Aware LLM Ranking</h1>
       <div class="tags">
         <span class="tag">Bradley-Terry Model</span>
-        <span class="tag">Bootstrap Inference</span>
-        <span class="tag">Covariate Control</span>
+        <span class="tag">Statistical Inference</span>
+        <span class="tag">Bias Correction</span>
       </div>
-      
-      <p class="lead">
-        Large Language Model (LLM) evaluation often relies on aggregated win-rates from pairwise human preferences. However, this approach is susceptible to imbalances in evaluation data and superficial stylistic confounds, most notably response length.
+
+      <p class="lead" style="font-size: 1.3rem; color: var(--color-text-muted); line-height: 1.6;">
+        Evaluating Large Language Models (LLMs) is complicated by human biases. This report introduces a method to decouple content quality from superficial presentation.
       </p>
 
-      <div class="abstract">
-        <strong>Abstract:</strong> This report presents a rigorous statistical framework for ranking LLMs. By utilizing the <strong>Bradley–Terry model</strong> with style covariates, we decouple intrinsic content quality from presentation tricks. We analyze a large-scale dataset of pairwise battles and identify that simple verbosity is a strong predictor of human preference. Our style-controlled ranking reveals "true" model capability by penalizing models that rely on excessive length to win battles.
+      <div class="abstract-box">
+        <span class="abstract-label">Abstract</span>
+        <p style="margin:0; font-style: italic; color: var(--color-text-heading);">
+          We present a rigorous statistical framework for ranking LLMs using the Bradley–Terry model augmented with style covariates. Our analysis of a large-scale pairwise battle dataset reveals that standard win-rate metrics are heavily confounded by response length. By controlling for verbosity and formatting, we derive a "style-free" ranking that better reflects intrinsic model reasoning capabilities.
+        </p>
       </div>
     </section>
 
     <section id="data">
       <h2>1. The Data Landscape</h2>
       <p>
-        The foundation of this analysis is a dataset of crowdsourced pairwise comparisons, often called "battles." Before modeling, it is crucial to inspect the distributional properties of the data to identify potential biases such as class imbalance or sparse coverage.
+        Reliable ranking requires understanding the underlying data distribution. We analyzed thousands of pairwise comparisons ("battles") to identify coverage gaps and imbalances.
       </p>
 
-      <div class="grid-large">
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(11).png" alt="Distribution of battle outcomes">
+      <div class="figure-grid">
+        <div class="fig-card">
+          <img src="results/figures/newplot%20(11).png" alt="Battle Outcomes">
           <figcaption>
-            <b>Figure 1: Battle Outcome Distribution.</b> The dataset includes wins for Model A, wins for Model B, and ties. Ties are excluded from the primary Bradley-Terry estimation to maximize signal clarity.
+            <strong>Figure 1: Battle Outcome Distribution</strong>
+            The distribution of Wins, Losses, and Ties. Ties are excluded from the primary ranking model to ensure clear preference signals.
           </figcaption>
-        </figure>
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(12).png" alt="Battle count per model">
+        </div>
+        <div class="fig-card">
+          <img src="results/figures/newplot%20(12).png" alt="Model Count">
           <figcaption>
-            <b>Figure 2: Model Exposure Balance.</b> Significant variance exists in battle counts. Popular models have thousands of evaluations, while newer ones have fewer. This motivates the use of probabilistic ranking over simple win-rates.
+            <strong>Figure 2: Assessment Imbalance</strong>
+            Evaluation volume varies significantly by model. The Bradley-Terry model is essential here, as it handles unbalanced data effectively unlike naive win-rates.
           </figcaption>
-        </figure>
+        </div>
       </div>
 
-      <div class="insight-box">
-        <span class="insight-header">Data Insight: Sparsity & Transitivity</span>
-        <p style="margin:0">
-          Naive win-rate calculations fail when the comparison matrix is sparse (meaning not every model has fought every other model). The heatmaps below (Fig 3 & 4) show the density of comparisons. The Bradley-Terry model solves this by leveraging <strong>transitivity</strong>: if Model A > Model B and Model B > Model C, we can infer A > C even without direct battles.
-        </p>
+      <div class="insight">
+        <div class="insight-icon">💡</div>
+        <div class="insight-content">
+          <h4>Sparsity & Transitivity</h4>
+          <p>
+            Many model pairs have never fought directly (see gaps in Fig 3). Probabilistic modeling solves this by inferring strength through common opponents (e.g., if A beats B, and B beats C, then A likely beats C).
+          </p>
+        </div>
       </div>
 
-      <div class="grid-large">
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(13).png" alt="Heatmap of all battles">
-          <figcaption><b>Figure 3:</b> Total pairwise battle matrix (All outcomes).</figcaption>
-        </figure>
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(14).png" alt="Heatmap of battles without ties">
-          <figcaption><b>Figure 4:</b> Pairwise battle matrix (Ties removed).</figcaption>
-        </figure>
-      </div>
-
-      <h3>Demographics & Interaction Complexity</h3>
-      <p>
-        The dataset is heavily English-dominated but includes a long tail of multilingual interactions. Most interactions are short (1-2 turns), suggesting the ranking primarily reflects "zero-shot" or "few-shot" QA capability rather than long-context maintenance.
-      </p>
-      
-      <div class="grid-large">
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(15).png" alt="Language distribution">
-          <figcaption><b>Figure 5:</b> Language distribution showing English dominance.</figcaption>
-        </figure>
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(16).png" alt="Conversation turns">
-          <figcaption><b>Figure 6:</b> Distribution of conversation turns per battle.</figcaption>
-        </figure>
+      <div class="figure-grid">
+        <div class="fig-card">
+          <img src="results/figures/newplot%20(13).png" alt="Matrix All">
+          <figcaption><strong>Figure 3:</strong> Full Battle Matrix (Sparse).</figcaption>
+        </div>
+        <div class="fig-card">
+          <img src="results/figures/newplot%20(14).png" alt="Matrix No Ties">
+          <figcaption><strong>Figure 4:</strong> Battle Matrix (Ties Removed).</figcaption>
+        </div>
       </div>
     </section>
 
     <section id="methodology">
       <h2>2. Statistical Methodology</h2>
       <p>
-        To move beyond simple win rates, we employ the <strong>Bradley–Terry (BT) model</strong>, a standard in psychometrics for pairwise comparisons. This probabilistic model assumes that the probability of model \( i \) beating model \( j \) depends on the difference in their latent strength parameters, \( \theta \).
+        We employ the <strong>Bradley–Terry model</strong>, which posits that the odds of Model \( i \) beating Model \( j \) depend on their latent strength difference.
       </p>
 
-      <h3>The Standard Model</h3>
-      <div class="math-block">
+      <h3>The Model Formulation</h3>
+      <p>The probability of a win is modeled via the logistic function:</p>
+      
+      <div class="math-container">
         $$ P(i \succ j) = \frac{1}{1 + e^{-(\theta_i - \theta_j)}} $$
       </div>
+
       <p>
-        Where \( \theta_i \) is the intrinsic skill of model \( i \). We estimate these parameters via Maximum Likelihood Estimation (MLE) by minimizing the negative log-likelihood of the observed battle outcomes.
+        To correct for bias, we extend this to the <strong>Style-Adjusted Model</strong>, introducing a vector of style features \( S_{ij} \) (e.g., length difference, formatting usage):
       </p>
 
-      <h3>The Style-Adjusted Model</h3>
-      <p>
-        Human annotators are imperfect. They may be swayed by superficial formatting (bold text, headers) or verbosity. To isolate "true" quality, we introduce a vector of style covariates \( S_{ij} \) (e.g., difference in length, difference in markdown usage).
-      </p>
-      <div class="math-block">
-         $$ P(i \succ j) = \sigma(\theta_i - \theta_j + \beta^T \cdot S_{ij}) $$
+      <div class="math-container">
+        $$ P(i \succ j) = \sigma(\underbrace{\theta_i - \theta_j}_{\text{Skill}} + \underbrace{\beta^T S_{ij}}_{\text{Style Bias}}) $$
       </div>
-      <p>
-        Here, \( \beta \) represents the coefficients for stylistic features. If \( \beta_{\text{length}} \) is positive and significant, it proves that users prefer longer answers <em>regardless of the model's identity</em>. The adjusted ranking is derived from \( \theta \) after controlling for these \( \beta \) terms.
-      </p>
 
-      <h3>Uncertainty Quantification</h3>
-      <p>
-        We use <strong>Bootstrap Resampling</strong> (\( N=1000 \)) to generate 95% Confidence Intervals (CIs). This ensures we do not over-interpret small differences in rank between models with overlapping performance bands.
-      </p>
-      <div class="grid-large" style="grid-template-columns: 1fr;"> <figure class="figure-card">
-          <img src="results/figures/newplot%20(26).png" alt="Bradley-Terry Scores with CI">
+      <div class="insight">
+        <div class="insight-icon">📊</div>
+        <div class="insight-content">
+          <h4>Bootstrap Inference</h4>
+          <p>
+            We don't just produce a ranking list; we produce confidence intervals. By resampling the dataset \( N=1000 \) times, we visualize the uncertainty (error bars) for every model's score.
+          </p>
+        </div>
+      </div>
+
+      <div class="figure-grid" style="grid-template-columns: 1fr;">
+        <div class="fig-card">
+          <img src="results/figures/newplot%20(26).png" alt="Uncertainty CIs">
           <figcaption>
-            <b>Figure 7: Model Strength Estimates (\( \theta \)) with 95% CIs.</b>
-            The error bars represent the stability of the ranking. Overlapping bars indicate statistical ties.
+            <strong>Figure 5: Model Strength with 95% Confidence Intervals</strong>
+            Overlapping bars indicate that two models are statistically indistinguishable. This prevents false precision in the leaderboard.
           </figcaption>
-        </figure>
+        </div>
       </div>
     </section>
 
     <section id="baseline">
-      <h2>3. Baseline Rankings (Uncontrolled)</h2>
+      <h2>3. Baseline Results</h2>
       <p>
-        Before applying corrections, we examine the standard "Leaderboard" view. This represents the raw preference of the human crowd, incorporating all biases.
+        Below is the "Standard Leaderboard" derived without style correction. This reflects the raw aggregate preference of human annotators.
       </p>
 
-      <div class="grid-large">
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(27).png" alt="Overall Rank Heatmap">
-          <figcaption><b>Figure 8:</b> Overall Model Ranking (Heatmap View).</figcaption>
-        </figure>
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(17).png" alt="Pairwise Win Rate Matrix">
-          <figcaption><b>Figure 9:</b> Empirical Pairwise Win-Rates. Darker squares indicate higher dominance.</figcaption>
-        </figure>
-      </div>
-
-      <h3>Robustness Check</h3>
-      <p>Are these rankings driven only by the most popular prompts? We re-ran the analysis excluding the top prompts to check for "overfitting" to common queries.</p>
-      <div class="grid-large">
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(18).png" alt="Average Win Rate">
-          <figcaption><b>Figure 10:</b> Average Win Rate (Global).</figcaption>
-        </figure>
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(19).png" alt="Win Rate excluding top prompts">
-          <figcaption><b>Figure 11:</b> Win Rate excluding top frequent prompts. The high correlation suggests the rankings are robust to prompt distribution.</figcaption>
-        </figure>
+      <div class="figure-grid">
+        <div class="fig-card">
+          <img src="results/figures/newplot%20(27).png" alt="Rank Heatmap">
+          <figcaption><strong>Figure 6:</strong> Global Ranking Heatmap.</figcaption>
+        </div>
+        <div class="fig-card">
+          <img src="results/figures/newplot%20(17).png" alt="Win Rates">
+          <figcaption><strong>Figure 7:</strong> Pairwise Win Rate Matrix.</figcaption>
+        </div>
       </div>
     </section>
 
     <section id="bias">
-      <h2>4. The Length Bias Problem</h2>
+      <h2>4. The Length Bias</h2>
       <p>
-        A critical finding of this report is the strong correlation between <strong>verbosity</strong> and <strong>rank</strong>. Evaluators systematically prefer longer responses, even when the content quality might be equivalent.
+        A critical discovery in our analysis is the overwhelming influence of <strong>response length</strong>.
       </p>
 
-      <div class="grid-large" style="grid-template-columns: 1fr;">
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(28).png" alt="Response length vs Rank">
+      <div class="figure-grid" style="grid-template-columns: 1fr;">
+        <div class="fig-card">
+          <img src="results/figures/newplot%20(28).png" alt="Length vs Rank">
           <figcaption>
-            <b>Figure 12: Verbosity vs. Rank Correlation.</b>
-            Models are ordered by their baseline rank (x-axis). The y-axis shows average response length in tokens. The trend line is undeniably positive: higher-ranked models tend to be significantly more verbose.
+            <strong>Figure 8: The Verbosity Correlation</strong>
+            Plotting average token count (y-axis) against model rank (x-axis) reveals a stark trend: higher-ranked models are significantly more verbose.
           </figcaption>
-        </figure>
+        </div>
       </div>
 
-      <div class="insight-box" style="border-left: 3px solid #eab308; background: rgba(234, 179, 8, 0.05);">
-        <span class="insight-header" style="color: #eab308;">Bias Alert</span>
-        <p style="margin:0">
-          This correlation poses a risk to the ecosystem: it encourages "bloat." If developers optimize purely for leaderboard rank, they may fine-tune models to output filler text rather than concise, helpful answers.
-        </p>
+      <div class="insight" style="background: #ffffff; border-left: 4px solid #f59e0b;">
+        <div class="insight-icon" style="background: #fef3c7; color: #d97706;">⚠️</div>
+        <div class="insight-content">
+          <h4>The Incentive Problem</h4>
+          <p>
+            This correlation suggests that models can "game" the leaderboard simply by generating longer, fluffier answers. This hurts efficiency and user experience in real-world applications.
+          </p>
+        </div>
       </div>
     </section>
 
     <section id="style">
-      <h2>5. Style-Controlled Results</h2>
+      <h2>5. Style-Controlled Ranking</h2>
       <p>
-        By applying the style-adjusted Bradley-Terry model, we can estimate the impact of formatting features (\( \beta \)) and derive a "purified" ranking (\( \theta \)).
+        When we mathematically control for length (and other features like Markdown usage), the ranking shifts. This "purified" ranking rewards concise, high-quality reasoning.
       </p>
 
-      <h3>Feature Importance</h3>
-      <p>Which superficial features matter most? We analyzed Length, Bold tags, LaTeX usage, and List formatting.</p>
-      
-      <div class="grid-large">
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(30).png" alt="Style coefficients">
+      <div class="figure-grid">
+        <div class="fig-card">
+          <img src="results/figures/newplot%20(30).png" alt="Coefficients">
           <figcaption>
-            <b>Figure 13: Style Coefficients (\( \beta \)).</b>
-            The coefficient for "Length" is the largest and most positive. This confirms that, holding content constant, simply writing <em>more</em> increases the probability of winning a battle.
+            <strong>Figure 9: Style Coefficients (\( \beta \))</strong>
+            The massive positive coefficient for "Length" confirms it is a dominant factor in winning battles, independent of model identity.
           </figcaption>
-        </figure>
-      </div>
-
-      <h3>The "True" Ranking</h3>
-      <p>
-        Figure 14 compares the Baseline Rank vs. the Style-Controlled Rank. Shifts in this chart are revealing:
-      </p>
-      <ul>
-        <li><strong>Downward Shift:</strong> Models that lose rank (move down) when style is controlled were likely "gaming" the system with verbosity or formatting.</li>
-        <li><strong>Upward Shift:</strong> Models that gain rank are concise, high-quality models that were previously unfairly penalized for being brief.</li>
-      </ul>
-
-      <div class="grid-large" style="grid-template-columns: 1fr;">
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(29).png" alt="Rank Shift Comparison">
-          <figcaption><b>Figure 14:</b> The "Shakedown." Comparing Baseline vs. Style-Controlled rankings.</figcaption>
-        </figure>
+        </div>
+        <div class="fig-card">
+          <img src="results/figures/newplot%20(29).png" alt="Rank Shift">
+          <figcaption>
+            <strong>Figure 10: The Shakedown</strong>
+            Comparing Baseline vs. Style-Controlled ranks. Models moving <em>up</em> are concise high-performers; models moving <em>down</em> were benefiting from verbosity.
+          </figcaption>
+        </div>
       </div>
     </section>
 
     <section id="domain">
       <h2>6. Domain Specificity</h2>
       <p>
-        General capability is a useful metric, but practical applications are often domain-specific. We clustered prompts into semantic categories (Coding, Math, Creative Writing, etc.) using embedding vectors (SVD visualization below).
+        Finally, we segment the battles by topic (Coding, Math, Writing) to see which models are specialists versus generalists.
       </p>
 
-      <div class="grid-large">
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(23).png" alt="Clustering Runtime">
-          <figcaption><b>Figure 15:</b> Clustering Runtime Analysis.</figcaption>
-        </figure>
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(24).png" alt="Clustering Elbow Plot">
-          <figcaption><b>Figure 16:</b> Elbow Plot to determine optimal \( K \) categories.</figcaption>
-        </figure>
-      </div>
-
-      <div class="grid-large">
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(25).png" alt="SVD of Prompts">
-          <figcaption><b>Figure 17:</b> Semantic Projection (SVD) of the prompt space. Distinct clusters emerge for coding (dense) vs. creative writing (diffuse).</figcaption>
-        </figure>
-        <figure class="figure-card">
-          <img src="results/figures/newplot%20(20).png" alt="Battles per category">
-          <figcaption><b>Figure 18:</b> Distribution of battles across identified categories.</figcaption>
-        </figure>
-      </div>
-
-      <h3>Category-Specific Leaderboards</h3>
-      <p>
-        Finally, we fit separate Bradley-Terry models for each category. Figure 19 reveals the specialists. Note how some models dominate "Code" but struggle in "Creative Writing."
-      </p>
-      
-      <div class="grid-large" style="grid-template-columns: 1fr;">
-        <figure class="figure-card">
+      <div class="figure-grid">
+        <div class="fig-card">
+          <img src="results/figures/newplot%20(25).png" alt="SVD Clusters">
+          <figcaption><strong>Figure 11:</strong> Semantic Cluster Map of Prompts.</figcaption>
+        </div>
+        <div class="fig-card">
           <img src="results/figures/newplot%20(22).png" alt="Category Heatmap">
           <figcaption>
-            <b>Figure 19: Category-Specific Rank Heatmap.</b>
-            Darker blue indicates a higher rank (Model 1 is best). This visualization allows users to select the best model for their specific use case.
+            <strong>Figure 12: Domain Leaderboard</strong>
+            A specialized view showing that the "best" model changes depending on whether you need Python code or Creative Writing.
           </figcaption>
-        </figure>
+        </div>
       </div>
     </section>
 
-    <section id="conclusion">
-      <h2>7. Conclusion</h2>
-      <p>
-        This report demonstrates that while crowdsourced evaluation is a powerful signal, it is noisy and biased. A raw win-rate leaderboard incentivizes verbosity and overlooks the nuances of domain specialization.
-      </p>
-      <div class="insight-box" style="border: 1px solid var(--text-secondary);">
-        <span class="insight-header" style="color: var(--text-primary);">Key Takeaways</span>
-        <ul>
-          <li><strong>Statistical Rigor:</strong> The Bradley-Terry model with bootstrap intervals provides a necessary safety margin against over-interpreting close ranks.</li>
-          <li><strong>The Verbosity Trap:</strong> Length bias is real and significant (\( p < 0.05 \)). Future evaluations must control for this to encourage efficiency.</li>
-          <li><strong>No One Size Fits All:</strong> The category heatmaps show that "General Purpose" models often lag behind specialists in Code and Math.</li>
-        </ul>
-      </div>
-    </section>
   </main>
 </div>
 
