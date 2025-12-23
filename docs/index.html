@@ -27,7 +27,6 @@
       
       --color-accent-primary: #4f46e5; /* Indigo 600 */
       --color-accent-secondary: #0ea5e9; /* Sky 500 */
-      --color-accent-highlight: #818cf8;
       
       --border-subtle: #e2e8f0;
       --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
@@ -50,7 +49,7 @@
       color: var(--color-text-main);
       font-family: var(--font-body);
       line-height: 1.8;
-      font-size: 18px; /* Improved readability */
+      font-size: 18px; 
     }
 
     /* Layout */
@@ -72,7 +71,6 @@
       display: flex;
       flex-direction: column;
       padding: 2.5rem 2rem;
-      /* Subtle pattern for texture */
       background-image: radial-gradient(circle at top left, #1e293b, transparent 40%);
     }
 
@@ -141,7 +139,6 @@
       line-height: 1.1;
       letter-spacing: -0.03em;
       margin-bottom: 1.5rem;
-      /* Engaging Gradient Text */
       background: linear-gradient(135deg, var(--color-text-heading) 0%, var(--color-accent-primary) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -167,16 +164,15 @@
     p {
       margin-bottom: 1.75rem;
     }
-
-    a.text-link {
-      color: var(--color-accent-primary);
-      text-decoration: underline;
-      text-decoration-thickness: 2px;
-      text-underline-offset: 2px;
-      text-decoration-color: rgba(79, 70, 229, 0.2);
-    }
-    a.text-link:hover {
-      text-decoration-color: var(--color-accent-primary);
+    
+    .theory-text {
+        font-size: 1.05rem;
+        color: var(--color-text-main);
+        background: rgba(241, 245, 249, 0.5);
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        border-left: 3px solid #cbd5e1;
+        margin-bottom: 2rem;
     }
 
     /* COMPONENTS */
@@ -267,7 +263,7 @@
       margin: 2rem 0;
       text-align: center;
       box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
-      font-size: 1.1rem;
+      font-size: 1.15rem;
       overflow-x: auto;
     }
 
@@ -359,8 +355,8 @@
       <h1>Style-Aware LLM Ranking</h1>
       <div class="tags">
         <span class="tag">Bradley-Terry Model</span>
-        <span class="tag">Statistical Inference</span>
-        <span class="tag">Bias Correction</span>
+        <span class="tag">Maximum Likelihood</span>
+        <span class="tag">Goodhart's Law</span>
       </div>
 
       <p class="lead" style="font-size: 1.3rem; color: var(--color-text-muted); line-height: 1.6;">
@@ -370,7 +366,7 @@
       <div class="abstract-box">
         <span class="abstract-label">Abstract</span>
         <p style="margin:0; font-style: italic; color: var(--color-text-heading);">
-          We present a rigorous statistical framework for ranking LLMs using the Bradley–Terry model augmented with style covariates. Our analysis of a large-scale pairwise battle dataset reveals that standard win-rate metrics are heavily confounded by response length. By controlling for verbosity and formatting, we derive a "style-free" ranking that better reflects intrinsic model reasoning capabilities.
+          We present a rigorous statistical framework for ranking LLMs using the Bradley–Terry model augmented with style covariates. Our analysis of a large-scale pairwise battle dataset reveals that standard win-rate metrics are heavily confounded by response length. This finding aligns with the concept of <strong>Reward Hacking</strong> in Reinforcement Learning, where models optimize for proxy metrics (verbosity) rather than true utility. By controlling for these confounds, we derive a "style-free" ranking that better reflects intrinsic model reasoning capabilities.
         </p>
       </div>
     </section>
@@ -403,7 +399,7 @@
         <div class="insight-content">
           <h4>Sparsity & Transitivity</h4>
           <p>
-            Many model pairs have never fought directly (see gaps in Fig 3). Probabilistic modeling solves this by inferring strength through common opponents (e.g., if A beats B, and B beats C, then A likely beats C).
+            Many model pairs have never fought directly (see gaps in Fig 3). Probabilistic modeling solves this by inferring strength through common opponents (e.g., if A beats B, and B beats C, then A likely beats C). This assumes <strong>transitivity</strong> in model quality, a core axiom of the underlying random utility model.
           </p>
         </div>
       </div>
@@ -423,7 +419,11 @@
     <section id="methodology">
       <h2>2. Statistical Methodology</h2>
       <p>
-        We employ the <strong>Bradley–Terry model</strong>, which posits that the odds of Model \( i \) beating Model \( j \) depend on their latent strength difference.
+        We employ the <strong>Bradley–Terry (BT) model</strong>, which posits that the odds of Model \( i \) beating Model \( j \) depend on their latent strength difference.
+      </p>
+      
+      <p class="theory-text">
+        <strong>Theoretical Context:</strong> The Bradley-Terry model is a specific instance of the <strong>Thurstone Case V</strong> model. It assumes that the performance of each model is a random variable following a Gumbel distribution. The logistic function naturally emerges from the difference of two Gumbel-distributed variables, providing a robust probabilistic justification for the sigmoid link function used below.
       </p>
 
       <h3>The Model Formulation</h3>
@@ -432,13 +432,21 @@
       <div class="math-container">
         $$ P(i \succ j) = \frac{1}{1 + e^{-(\theta_i - \theta_j)}} $$
       </div>
+      
+      <p>
+        We estimate the parameters \( \theta \) by minimizing the <strong>Negative Log-Likelihood (NLL)</strong> loss function over the set of all battles \( \mathcal{D} \):
+      </p>
+      
+      <div class="math-container">
+        $$ \mathcal{L}(\theta) = - \sum_{(i,j) \in \mathcal{D}} \left( y_{ij} \log P_{ij} + (1-y_{ij}) \log (1-P_{ij}) \right) $$
+      </div>
 
       <p>
         To correct for bias, we extend this to the <strong>Style-Adjusted Model</strong>, introducing a vector of style features \( S_{ij} \) (e.g., length difference, formatting usage):
       </p>
 
       <div class="math-container">
-        $$ P(i \succ j) = \sigma(\underbrace{\theta_i - \theta_j}_{\text{Skill}} + \underbrace{\beta^T S_{ij}}_{\text{Style Bias}}) $$
+        $$ P(i \succ j) = \sigma(\underbrace{\theta_i - \theta_j}_{\text{Intrinsic Skill}} + \underbrace{\beta^T S_{ij}}_{\text{Extrinsic Bias}}) $$
       </div>
 
       <div class="insight">
@@ -446,7 +454,7 @@
         <div class="insight-content">
           <h4>Bootstrap Inference</h4>
           <p>
-            We don't just produce a ranking list; we produce confidence intervals. By resampling the dataset \( N=1000 \) times, we visualize the uncertainty (error bars) for every model's score.
+            Point estimates are insufficient for rigorous comparison. We perform <strong>Bootstrap Resampling</strong> (\( N=1000 \)) to estimate the sampling distribution of \( \theta \). The resulting 95% confidence intervals allow us to distinguish between "noise" and "signal" in rank differences.
           </p>
         </div>
       </div>
@@ -465,7 +473,7 @@
     <section id="baseline">
       <h2>3. Baseline Results</h2>
       <p>
-        Below is the "Standard Leaderboard" derived without style correction. This reflects the raw aggregate preference of human annotators.
+        Below is the "Standard Leaderboard" derived without style correction. This reflects the raw aggregate preference of human annotators, which inherently includes their biases.
       </p>
 
       <div class="figure-grid">
@@ -483,7 +491,7 @@
     <section id="bias">
       <h2>4. The Length Bias</h2>
       <p>
-        A critical discovery in our analysis is the overwhelming influence of <strong>response length</strong>.
+        A critical discovery in our analysis is the overwhelming influence of <strong>response length</strong>. Psychometric literature suggests this stems from the "Length-Complexity Heuristic," where annotators use verbosity as a proxy for effort and factual depth.
       </p>
 
       <div class="figure-grid" style="grid-template-columns: 1fr;">
@@ -499,9 +507,9 @@
       <div class="insight" style="background: #ffffff; border-left: 4px solid #f59e0b;">
         <div class="insight-icon" style="background: #fef3c7; color: #d97706;">⚠️</div>
         <div class="insight-content">
-          <h4>The Incentive Problem</h4>
+          <h4>Goodhart's Law in RLHF</h4>
           <p>
-            This correlation suggests that models can "game" the leaderboard simply by generating longer, fluffier answers. This hurts efficiency and user experience in real-world applications.
+            When a measure becomes a target, it ceases to be a good measure. Since RLHF pipelines reward human preference, and humans prefer length, models optimize for length. This creates a feedback loop where models become unnecessarily verbose to "hack" the reward function.
           </p>
         </div>
       </div>
@@ -518,7 +526,7 @@
           <img src="results/figures/newplot%20(30).png" alt="Coefficients">
           <figcaption>
             <strong>Figure 9: Style Coefficients (\( \beta \))</strong>
-            The massive positive coefficient for "Length" confirms it is a dominant factor in winning battles, independent of model identity.
+            The large positive coefficient for "Length" confirms it is a dominant factor. A coefficient of \( \beta \approx 0.5 \) implies that a longer response has significantly higher log-odds of winning, independent of model identity.
           </figcaption>
         </div>
         <div class="fig-card">
@@ -534,13 +542,13 @@
     <section id="domain">
       <h2>6. Domain Specificity</h2>
       <p>
-        Finally, we segment the battles by topic (Coding, Math, Writing) to see which models are specialists versus generalists.
+        Finally, we segment the battles by topic (Coding, Math, Writing) using semantic embedding clusters. The "No Free Lunch" theorem suggests no single model should dominate all distributions perfectly.
       </p>
 
       <div class="figure-grid">
         <div class="fig-card">
           <img src="results/figures/newplot%20(25).png" alt="SVD Clusters">
-          <figcaption><strong>Figure 11:</strong> Semantic Cluster Map of Prompts.</figcaption>
+          <figcaption><strong>Figure 11:</strong> Semantic Cluster Map of Prompts (SVD Projection).</figcaption>
         </div>
         <div class="fig-card">
           <img src="results/figures/newplot%20(22).png" alt="Category Heatmap">
